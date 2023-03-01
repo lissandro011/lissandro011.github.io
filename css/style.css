@@ -1,0 +1,183 @@
+
+body {
+  font-family: 'Roboto', sans-serif;
+  margin: 0;
+}
+
+.container {
+    width: 85%;
+    max-width: 850px;
+    margin: 0 auto;
+}
+
+.header {
+  background: #333;
+  color: white;
+  padding: 8px 0;
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+}
+
+  .header a {
+  color: white;
+  text-decoration: none;
+  }
+
+.logo-nav-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.logo {
+letter-spacing: 15px;
+font-size: 18px;
+}
+
+.menu-icon {
+  display: none;
+}
+
+.navigation ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+  .navigation ul li {
+    display: inline-block;
+  }
+    .navigation ul li a {
+      display: block;
+      padding: 8px 16px;
+      transition: all 0.4s linear;
+      border-radius: 5px;
+    }
+      .navigation ul li a:hover {
+        background: #4a4a4a;
+      }
+      
+h1, h2, h3 {
+  text-align: center;
+}
+
+.main {
+  padding-top: 5rem;
+}
+
+.bio {  
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-bottom: 50px;
+  text-align: center;
+}
+
+.profile-photo {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  text-align: center;
+}
+
+.section-title {
+  font-size: 30px;
+  margin-bottom: 30px;
+  text-decoration: underline;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list li {
+  margin-bottom: 20px;
+}
+
+.list i {
+  margin-right: 10px;
+}
+
+.section-title {
+  margin: 20px 0;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.flex-container {
+  display: flex;
+  justify-content: space-around;
+}
+
+.card {
+  padding: 15px;
+  width: 260px;
+  background: #f8f8f8;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid #ddd;
+}
+
+.card-icon {
+  text-align: center;
+  padding-top: 10px;
+}
+
+.card-text {
+  text-align: center;
+}
+
+.footer {
+  background: #f2f2f2;
+  padding: 64px 0;
+  text-align: center;
+  margin-top: 96px;
+}
+
+@media only screen and (max-width:890px) {
+
+  .bio {
+    margin: 0 auto;
+  }
+
+  .main {
+    padding-top: 3rem;
+  }
+  
+  .menu-icon {
+    display: block;
+    cursor: pointer;
+  }
+
+  .navigation {
+    width: 100%;
+    margin-top: 1rem;
+  }
+
+    .navigation ul {
+      display: none;
+    }
+
+    .navigation ul.show {
+      display: block;
+    }
+
+    .navigation ul li {
+      display: block;
+    }
+
+      .navigation ul li a {
+        display: block;
+        padding: 8px 0;
+        transition: all 0.4s linear;
+        border-radius: 5px;
+      }
+
+        .navigation ul li a:hover {
+          background: #4a4a4a;
+        }
+}
+
