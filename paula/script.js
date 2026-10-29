@@ -9,20 +9,20 @@
   // Murcielaguito abrazando un corazón
   var CUTE_BAT =
     '<svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">' +
-      '<g class="bat-wing bat-wing--l"><path fill="#4a2b5c" d="M52 30C42 18 24 12 4 17c6 4 8 10 7 16 7-4 13-2 15 4 6-5 14-3 16 4 4-5 8-5 11-3Z"/></g>' +
-      '<g class="bat-wing bat-wing--r"><path fill="#4a2b5c" d="M68 30c10-12 28-18 48-13-6 4-8 10-7 16-7-4-13-2-15 4-6-5-14-3-16 4-4-5-8-5-11-3Z"/></g>' +
-      '<path fill="#5d3c70" d="M50 20 47 5l11 10Zm20 0 3-15-11 10Z"/>' +
-      '<path fill="#ff9fbb" d="m50.5 14-2-6.5 6 5Zm19 0 2-6.5-6 5Z"/>' +
-      '<ellipse cx="60" cy="40" rx="11" ry="13" fill="#5d3c70"/>' +
-      '<circle cx="60" cy="24" r="12" fill="#5d3c70"/>' +
+      '<g class="bat-wing bat-wing--l"><path fill="#622638" d="M52 30C42 18 24 12 4 17c6 4 8 10 7 16 7-4 13-2 15 4 6-5 14-3 16 4 4-5 8-5 11-3Z"/></g>' +
+      '<g class="bat-wing bat-wing--r"><path fill="#622638" d="M68 30c10-12 28-18 48-13-6 4-8 10-7 16-7-4-13-2-15 4-6-5-14-3-16 4-4-5-8-5-11-3Z"/></g>' +
+      '<path fill="#80344a" d="M50 20 47 5l11 10Zm20 0 3-15-11 10Z"/>' +
+      '<path fill="#ffa0aa" d="m50.5 14-2-6.5 6 5Zm19 0 2-6.5-6 5Z"/>' +
+      '<ellipse cx="60" cy="40" rx="11" ry="13" fill="#80344a"/>' +
+      '<circle cx="60" cy="24" r="12" fill="#80344a"/>' +
       '<path d="M52.5 23.5q2.5-3 5 0m5 0q2.5-3 5 0" fill="none" stroke="#fff1f5" stroke-width="1.6" stroke-linecap="round"/>' +
-      '<ellipse cx="51" cy="28" rx="2.6" ry="1.6" fill="#ff8fab" opacity=".85"/>' +
-      '<ellipse cx="69" cy="28" rx="2.6" ry="1.6" fill="#ff8fab" opacity=".85"/>' +
+      '<ellipse cx="51" cy="28" rx="2.6" ry="1.6" fill="#ff7d8c" opacity=".85"/>' +
+      '<ellipse cx="69" cy="28" rx="2.6" ry="1.6" fill="#ff7d8c" opacity=".85"/>' +
       '<path d="M57.5 29q2.5 2.2 5 0" fill="none" stroke="#fff1f5" stroke-width="1.2" stroke-linecap="round"/>' +
       '<path fill="#fff" d="m58.3 29.6.7 1.8.7-1.5Zm2 .3.7 1.5.7-1.8Z"/>' +
-      '<path class="bat-heart" fill="#ff7fa6" d="M60 66C47 57 45 47 52 45c4-1 6.5 1 8 3.5 1.5-2.5 4-4.5 8-3.5 7 2 5 12-8 21Z"/>' +
-      '<ellipse cx="52.5" cy="47" rx="3" ry="2.4" fill="#5d3c70"/>' +
-      '<ellipse cx="67.5" cy="47" rx="3" ry="2.4" fill="#5d3c70"/>' +
+      '<path class="bat-heart" fill="#ff5a72" d="M60 66C47 57 45 47 52 45c4-1 6.5 1 8 3.5 1.5-2.5 4-4.5 8-3.5 7 2 5 12-8 21Z"/>' +
+      '<ellipse cx="52.5" cy="47" rx="3" ry="2.4" fill="#80344a"/>' +
+      '<ellipse cx="67.5" cy="47" rx="3" ry="2.4" fill="#80344a"/>' +
     '</svg>';
 
   // Silueta que vuela por el cielo
@@ -55,7 +55,7 @@
   // Corazones y destellos que suben despacito
   var heartsLayer = document.getElementById('floating-hearts');
   var HEART = '♥︎';
-  var FLOAT_COLORS = ['#ff7fa6', '#ffb8cb', '#e0467f', '#f6d39b'];
+  var FLOAT_COLORS = ['#ff5a72', '#ffb0ba', '#d42a45', '#f6d39b'];
 
   function spawnFloatingHeart() {
     if (document.hidden || heartsLayer.childElementCount > 16) return;
