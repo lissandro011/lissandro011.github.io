@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarjeta con QR · Para Paula</title>
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500&family=Great+Vibes&family=Jost:wght@500&display=swap" rel="stylesheet">
+    <style>
+      @page {
+        size: A4;
+        margin: 15mm;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        padding: 24px 16px;
+        background: #2a0d2e;
+        font-family: 'Cormorant Garamond', Georgia, serif;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .instructions {
+        max-width: 420px;
+        margin: 0;
+        text-align: center;
+        font-family: 'Jost', Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #ffd9e4;
+      }
+
+      .instructions button {
+        margin-top: 12px;
+        padding: 10px 22px;
+        border: 0;
+        border-radius: 999px;
+        background: #ff7fa6;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      /* Línea punteada para recortar */
+      .cut {
+        padding: 6mm;
+        border: 1px dashed rgba(255, 217, 228, 0.6);
+        border-radius: 4mm;
+      }
+
+      .card {
+        width: 80mm;
+        padding: 7mm 7mm 6mm;
+        border-radius: 5mm;
+        background: radial-gradient(120% 70% at 50% 0%, #ffe6ee 0%, #fff8f5 60%);
+        border: 0.6mm solid #f2b8c9;
+        text-align: center;
+        color: #3a0f2e;
+      }
+
+      .bat {
+        width: 22mm;
+        margin: -1mm auto 1mm;
+      }
+
+      .eyebrow {
+        margin: 0;
+        font-family: 'Jost', Arial, sans-serif;
+        font-weight: 500;
+        font-size: 2.6mm;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        color: #c23d72;
+      }
+
+      .title {
+        margin: 1.5mm 0 3mm;
+        font-style: italic;
+        font-weight: 500;
+        font-size: 6.4mm;
+        line-height: 1.1;
+        text-wrap: balance;
+      }
+
+      .qr {
+        display: block;
+        width: 46mm;
+        height: 46mm;
+        margin: 0 auto;
+        padding: 2mm;
+        border-radius: 3mm;
+        background: #fff;
+      }
+
+      .scan {
+        margin: 3mm 0 0;
+        font-family: 'Great Vibes', cursive;
+        font-size: 8mm;
+        line-height: 1;
+        color: #c23d72;
+      }
+
+      .logo {
+        margin: 2mm 0 0;
+        font-size: 4mm;
+        letter-spacing: 0.3em;
+        padding-left: 0.3em;
+      }
+
+      @media print {
+        body {
+          background: none;
+          min-height: 0;
+          padding: 0;
+        }
+
+        .instructions {
+          display: none;
+        }
+
+        .cut {
+          border-color: #bbb;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+
+    <p class="instructions">
+      Imprimí esta tarjeta en tamaño real (100%, sin “ajustar a la página”),
+      recortala por la línea punteada y guardala en la caja con el collar.
+      <br>
+      <button type="button" onclick="window.print()">Imprimir tarjeta</button>
+    </p>
+
+    <div class="cut">
+      <div class="card">
+        <svg class="bat" viewBox="0 0 120 72" aria-hidden="true">
+          <path fill="#4a2b5c" d="M52 30C42 18 24 12 4 17c6 4 8 10 7 16 7-4 13-2 15 4 6-5 14-3 16 4 4-5 8-5 11-3Z"/>
+          <path fill="#4a2b5c" d="M68 30c10-12 28-18 48-13-6 4-8 10-7 16-7-4-13-2-15 4-6-5-14-3-16 4-4-5-8-5-11-3Z"/>
+          <path fill="#5d3c70" d="M50 20 47 5l11 10Zm20 0 3-15-11 10Z"/>
+          <path fill="#ff9fbb" d="m50.5 14-2-6.5 6 5Zm19 0 2-6.5-6 5Z"/>
+          <ellipse cx="60" cy="40" rx="11" ry="13" fill="#5d3c70"/>
+          <circle cx="60" cy="24" r="12" fill="#5d3c70"/>
+          <path d="M52.5 23.5q2.5-3 5 0m5 0q2.5-3 5 0" fill="none" stroke="#fff1f5" stroke-width="1.6" stroke-linecap="round"/>
+          <ellipse cx="51" cy="28" rx="2.6" ry="1.6" fill="#ff8fab" opacity=".85"/>
+          <ellipse cx="69" cy="28" rx="2.6" ry="1.6" fill="#ff8fab" opacity=".85"/>
+          <path d="M57.5 29q2.5 2.2 5 0" fill="none" stroke="#fff1f5" stroke-width="1.2" stroke-linecap="round"/>
+          <path fill="#fff" d="m58.3 29.6.7 1.8.7-1.5Zm2 .3.7 1.5.7-1.8Z"/>
+          <path fill="#ff7fa6" d="M60 66C47 57 45 47 52 45c4-1 6.5 1 8 3.5 1.5-2.5 4-4.5 8-3.5 7 2 5 12-8 21Z"/>
+          <ellipse cx="52.5" cy="47" rx="3" ry="2.4" fill="#5d3c70"/>
+          <ellipse cx="67.5" cy="47" rx="3" ry="2.4" fill="#5d3c70"/>
+        </svg>
+
+        <p class="eyebrow">Para mi bebota</p>
+        <p class="title">La sorpresa no termina en el collar…</p>
+
+        <img class="qr" src="qr-paula.svg" alt="Código QR que abre la sorpresa">
+
+        <p class="scan">Escaneame ♡</p>
+        <p class="logo">L ♥&#xFE0E; P</p>
+      </div>
+    </div>
+
+  </body>
+
+</html>
