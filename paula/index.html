@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Para Paula · De Lisandro</title>
+    <meta name="description" content="Un pedacito de nosotros, guardado en una sorpresa. Con amor, Lisandro.">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#160508">
+    <meta property="og:title" content="Para Paula · De Lisandro">
+    <meta property="og:description" content="Un pedacito de nosotros, guardado en una sorpresa. Con amor, Lisandro.">
+    <meta property="og:type" content="website">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 92'%3E%3Cpath d='M50 88C18 66 2 46 6 26 10 8 34 2 50 22 66 2 90 8 94 26 98 46 82 66 50 88Z' fill='%23ff5a72'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Great+Vibes&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+  </head>
+
+  <body>
+
+    <!-- Cielo de fondo: estrellas, luna, murciélagos y corazones (se dibujan desde script.js) -->
+    <div class="sky" aria-hidden="true">
+      <div class="stars" id="stars"></div>
+      <div class="moon"></div>
+      <div class="flyer flyer--one" data-flyer></div>
+      <div class="flyer flyer--two" data-flyer></div>
+      <div class="fog"></div>
+    </div>
+    <div class="floating-hearts" id="floating-hearts" aria-hidden="true"></div>
+    <div class="burst" id="burst" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <span class="logo" role="img" aria-label="Lisandro y Paula">L <span class="logo-heart">♥&#xFE0E;</span> P</span>
+    </header>
+
+    <main class="stage">
+
+      <!-- PANTALLA 1 — La sorpresa y nuestro primer beso -->
+      <section class="screen" id="sorpresa" data-screen aria-labelledby="t-sorpresa">
+        <article class="card card--mascot">
+          <div class="mascot" data-bat></div>
+
+          <p class="eyebrow reveal" style="--i:0">Para mi bebota</p>
+          <h1 class="title reveal" id="t-sorpresa" tabindex="-1" style="--i:1">Hay algo más en esta caja.</h1>
+          <p class="lead reveal" style="--i:2"><span class="line">El collar es solo una parte de la sorpresa.</span><span class="line">La otra empieza acá, con un recuerdo nuestro.</span></p>
+
+          <p class="divider reveal" style="--i:3" aria-hidden="true">♡</p>
+
+          <h2 class="subtitle reveal" style="--i:4">Seguro que conocés este video</h2>
+
+          <figure class="video reveal" style="--i:5">
+            <p class="eyebrow eyebrow--gold">Nuestro primer beso</p>
+            <div class="video-frame" id="video-frame">
+              <button type="button" class="video-poster" id="video-play">
+                <img src="https://i.ytimg.com/vi/SsMf6sp0zJc/hqdefault.jpg" alt="" decoding="async" onerror="this.remove()">
+                <span class="play-pill">
+                  <span class="play-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
+                  </span>
+                  ¿Volvemos a ese momento?
+                </span>
+              </button>
+            </div>
+            <figcaption class="video-caption">
+              <span class="song"><span aria-hidden="true">♪ </span>No me olvido más esta canción</span>
+              <a class="yt-link" id="yt-link" href="https://youtu.be/SsMf6sp0zJc" target="_blank" rel="noopener">Ver en YouTube ↗</a>
+            </figcaption>
+          </figure>
+
+          <!-- Aparece cuando le da play al video -->
+          <div class="continue" id="continue">
+            <div class="continue-inner">
+              <p class="hint">Y esto recién empieza…</p>
+              <button type="button" class="btn btn-primary" id="btn-continue" data-go="carta">Seguí por acá bb →</button>
+            </div>
+          </div>
+
+          <p class="quote reveal" style="--i:6">Un poquito de magia. Un montón de vos.</p>
+        </article>
+      </section>
+
+      <!-- PANTALLA 2 — La carta romántica -->
+      <section class="screen" id="carta" data-screen aria-labelledby="t-carta" hidden>
+        <article class="card card--letter">
+          <button type="button" class="back" data-go="sorpresa">← Volver a nuestro recuerdo</button>
+
+          <p class="eyebrow reveal" style="--i:0">De Lisandro, para vos ♡</p>
+          <h1 class="title reveal" id="t-carta" tabindex="-1" style="--i:1">Qué bueno tenerte en mi vida.</h1>
+
+          <div class="letter">
+            <p class="reveal" style="--i:2">No sabía que ese beso iba a convertirse en tantas ganas de estar con vos.</p>
+            <p class="letter-highlight reveal" style="--i:3">Sos lo mejor que me pasó este año.</p>
+            <p class="reveal" style="--i:4">Me encanta cada momento con vos, desde salir a cualquier lado hasta caminar a la deriva.</p>
+            <p class="reveal" style="--i:5">Y si hoy preparé todo esto, es porque hay algo que tengo que decirte…</p>
+          </div>
+
+          <p class="signature reveal" style="--i:6"><span>Con mucho amor,</span> Lisandro</p>
+
+          <div class="cta reveal" style="--i:7">
+            <button type="button" class="btn btn-primary" data-go="pregunta">Tengo una pregunta para vos ♡</button>
+            <p class="hint">Tocá cuando estés lista.</p>
+          </div>
+        </article>
+      </section>
+
+      <!-- PANTALLA 3 — La gran pregunta -->
+      <section class="screen" id="pregunta" data-screen aria-labelledby="t-pregunta" hidden>
+        <article class="card card--question">
+          <div class="big-heart reveal" style="--i:0" aria-hidden="true">
+            <svg viewBox="0 0 100 92">
+              <defs>
+                <linearGradient id="heart-gradient" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#ffc2c8"/>
+                  <stop offset=".5" stop-color="#ff5a72"/>
+                  <stop offset="1" stop-color="#c41e3a"/>
+                </linearGradient>
+              </defs>
+              <path d="M50 88C18 66 2 46 6 26 10 8 34 2 50 22 66 2 90 8 94 26 98 46 82 66 50 88Z" fill="url(#heart-gradient)"/>
+              <path d="M24 20c-7 3-10 10-8 18" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+          </div>
+
+          <p class="eyebrow reveal" style="--i:1">Paula… ✧</p>
+          <h1 class="title title--question reveal" id="t-pregunta" tabindex="-1" style="--i:2">¿Querés ser mi novia?</h1>
+          <p class="lead reveal" style="--i:3"><span class="line">Quería decírtelo hace rato y ya estoy seguro de esto.</span></p>
+
+          <div class="choices reveal" style="--i:4">
+            <button type="button" class="btn btn-primary btn-yes" id="btn-si">Sí, quiero ♡</button>
+            <button type="button" class="btn btn-ghost" id="btn-persona">Prefiero decírtelo en persona</button>
+          </div>
+          <p class="persona-note" id="persona-note" role="status" aria-live="polite"></p>
+        </article>
+      </section>
+
+      <!-- PANTALLA 4 — Si acepta -->
+      <section class="screen" id="si" data-screen aria-labelledby="t-si" hidden>
+        <article class="card card--mascot card--yes">
+          <div class="mascot mascot--yes" data-bat></div>
+
+          <p class="eyebrow reveal" style="--i:0">Nuestro próximo capítulo ♡</p>
+          <h1 class="title reveal" id="t-si" tabindex="-1" style="--i:1">Ahora sí… vení, dame un beso.</h1>
+          <p class="lead reveal" style="--i:2"><span class="line">Qué lindo haberte conocido.</span><span class="line">Y qué lindo todo lo que nos queda por vivir.</span></p>
+
+          <p class="signature signature--duo reveal" style="--i:3">Paula &amp; Lisandro</p>
+          <p class="since reveal" id="since" style="--i:4"></p>
+
+          <p class="eyebrow dedication reveal" style="--i:5">Para mi bebota ♡</p>
+
+          <div class="reveal" style="--i:6">
+            <button type="button" class="btn btn-ghost" data-go="sorpresa">Volver a ver nuestra sorpresa ↺</button>
+          </div>
+        </article>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <p class="footer-love">Hecho con amor, para vos. <span class="footer-heart">♥&#xFE0E;</span></p>
+    </footer>
+
+    <script src="script.js"></script>
+    <script src="https://www.youtube.com/iframe_api" async></script>
+
+  </body>
+
+</html>
