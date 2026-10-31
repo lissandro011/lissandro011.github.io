@@ -227,28 +227,7 @@
 
   // ---------- La pregunta ----------
 
-  var since = document.getElementById('since');
-  var SINCE_KEY = 'lp-novios-desde';
-
-  function readSince() {
-    try { return localStorage.getItem(SINCE_KEY); } catch (err) { return null; }
-  }
-
-  function paintSince(iso) {
-    var date = iso ? new Date(iso) : null;
-    if (!date || isNaN(date)) return;
-    since.textContent = 'Novios desde el ' + date.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }) + '\u00A0♡';
-  }
-
-  paintSince(readSince());
-
   document.getElementById('btn-si').addEventListener('click', function () {
-    var iso = readSince();
-    if (!iso) {
-      iso = new Date().toISOString();
-      try { localStorage.setItem(SINCE_KEY, iso); } catch (err) { /* sin almacenamiento, no pasa nada */ }
-    }
-    paintSince(iso);
     if (navigator.vibrate) navigator.vibrate([40, 60, 40, 60, 120]);
     show('si');
   });
