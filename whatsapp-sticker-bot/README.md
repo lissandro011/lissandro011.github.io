@@ -13,7 +13,7 @@ Un bot de WhatsApp hecho con [neonize](https://github.com/krypton-byte/neonize) 
 - Python 3.10 o más nuevo.
 - `ffmpeg` y `ffprobe` con soporte WebP (los paquetes de Debian, Ubuntu y Homebrew lo traen).
 - `libmagic` (la usa neonize).
-- Linux x86_64 o ARM64 (por ejemplo, Raspberry Pi OS de 64 bits) o macOS. En Windows, usá WSL o Docker.
+- Linux (x86_64 o ARM64, por ejemplo Raspberry Pi OS de 64 bits), macOS o Windows de 64 bits (x64). En Windows ARM no hay binario de libmagic: usá Docker o WSL.
 
 ## Instalación
 
@@ -38,6 +38,25 @@ pip install -r requirements.txt
 cp .env.example .env        # y completá WA_PHONE_NUMBER
 ```
 
+Windows (PowerShell):
+
+```powershell
+winget install Python.Python.3.13
+winget install Gyan.FFmpeg
+# Cerrá y volvé a abrir la terminal para que tome el PATH, y verificá que
+# ffmpeg sepa hacer WebP animados (tiene que aparecer una línea):
+ffmpeg -hide_banner -encoders | findstr libwebp_anim
+
+cd whatsapp-sticker-bot
+py -m venv .venv
+.venv\Scripts\Activate.ps1   # si da error de permisos: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+pip install -r requirements.txt
+copy .env.example .env
+notepad .env                  # completá WA_PHONE_NUMBER
+```
+
+En Windows no hace falta instalar libmagic: neonize trae `python-magic-bin`, que incluye la DLL. Al arrancar, el bot revisa que ffmpeg tenga soporte WebP y avisa en el log si falta.
+
 ## Configuración
 
 Todo se configura con variables de entorno. También se puede usar un archivo `.env` en la carpeta del bot, y las variables reales tienen prioridad sobre ese archivo.
@@ -57,6 +76,7 @@ Todo se configura con variables de entorno. También se puede usar un archivo `.
 | `MAX_CONCURRENT_CONVERSIONS` | `2` | Cuántas conversiones corren a la vez. |
 | `PAIR_TIMEOUT_SECONDS` | `180` | Cuánto se espera a que ingreses el código de vinculación. |
 | `LOG_LEVEL` / `NEONIZE_LOG_LEVEL` | `INFO` / `WARNING` | Nivel de log del bot y de la conexión con WhatsApp. |
+| `LOG_FILE` | (vacío) | Archivo de log además de la consola (rota a los 5 MB). Hace falta en la tarea programada de Windows. |
 
 **Formato del número en Argentina:** 54 + 9 + código de área sin el 0 + número sin el 15. Por ejemplo, `5491123456789`.
 
@@ -174,6 +194,35 @@ docker compose logs -f
 - Para actualizar: `docker compose build && docker compose up -d`.
 
 Si desvinculás el bot desde el teléfono, el contenedor sale con código 2 y Docker lo vuelve a levantar. Cada ~3 minutos va a pedir un código nuevo (aparece en `docker compose logs -f`). Si no querés volver a vincularlo, frenalo con `docker compose stop`.
+
+En Windows también funciona con Docker Desktop y los mismos comandos. Para que vuelva solo después de reiniciar, activá "Start Docker Desktop when you sign in" (Docker Desktop arranca recién cuando iniciás sesión).
+
+### Opción C: Windows con una tarea programada
+
+Es el equivalente al servicio de systemd: arranca con la PC aunque nadie inicie sesión y, si el bot se cae, lo vuelve a levantar en menos de 5 minutos.
+
+1. Instalá y vinculá el número a mano una vez (`python bot.py`, ver arriba). Cuando diga "Conectado a WhatsApp", cortalo con Ctrl+C.
+2. Agregá `LOG_FILE=data\bot.log` al `.env` (la tarea corre sin consola).
+3. Abrí PowerShell **como administrador**, andá a la carpeta del bot y corré:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File deploy\windows\instalar-tarea.ps1
+   ```
+
+4. Mirá el log: `Get-Content -Wait -Tail 50 data\bot.log`
+
+Comandos de la tarea:
+
+```powershell
+Disable-ScheduledTask -TaskName "Licha.bot"; Stop-ScheduledTask -TaskName "Licha.bot"    # detener
+Enable-ScheduledTask -TaskName "Licha.bot"; Start-ScheduledTask -TaskName "Licha.bot"    # reanudar
+Unregister-ScheduledTask -TaskName "Licha.bot" -Confirm:$false                           # quitar
+```
+
+- Para detenerlo usá `Disable-ScheduledTask`; con solo `Stop-ScheduledTask`, la tarea lo vuelve a arrancar a los 5 minutos.
+- No corras `python bot.py` a mano mientras la tarea está activa: serían dos conexiones con la misma sesión y WhatsApp las va cortando.
+- La PC tiene que quedar prendida: en **Configuración > Sistema > Energía**, poné la suspensión en "Nunca". Los reinicios por actualizaciones no son problema, porque la tarea arranca con Windows.
+- Si hay que volver a vincular (código de salida 2), la tarea lo reintenta cada 5 minutos y cada vez pide un código nuevo, que aparece en el log. Si no querés vincularlo, deshabilitá la tarea.
 
 ## Notas
 

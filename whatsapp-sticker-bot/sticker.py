@@ -298,6 +298,28 @@ def _require(binary: str) -> str:
     return path
 
 
+def ffmpeg_problem(timeout: float = 15.0) -> str | None:
+    """Revisa que ffmpeg/ffprobe estén instalados y que ffmpeg sepa crear WebP animados.
+
+    Devuelve una descripción del problema, o None si está todo bien.
+    """
+    for binary in ("ffmpeg", "ffprobe"):
+        if shutil.which(binary) is None:
+            return f"no se encontró '{binary}' en el PATH"
+    try:
+        proc = subprocess.run(
+            [shutil.which("ffmpeg"), "-hide_banner", "-encoders"],  # type: ignore[list-item]
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"no se pudo ejecutar ffmpeg: {exc}"
+    if b"libwebp_anim" not in proc.stdout:
+        return "este ffmpeg no tiene el codificador libwebp_anim (hace falta un build con libwebp)"
+    return None
+
+
 def probe_video(path: Path, timeout: float = 30.0) -> VideoInfo:
     """Duración y tamaño visible (ya rotado) del primer stream de video."""
     cmd = [

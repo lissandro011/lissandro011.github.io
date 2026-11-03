@@ -161,6 +161,16 @@ def total_duration_ms(webp: bytes) -> int:
 
 
 @needs_ffmpeg
+def test_chequeo_de_ffmpeg_ok():
+    assert sticker.ffmpeg_problem() is None
+
+
+def test_chequeo_de_ffmpeg_sin_ffmpeg(monkeypatch):
+    monkeypatch.setattr(sticker.shutil, "which", lambda _name: None)
+    assert "no se encontró 'ffmpeg'" in sticker.ffmpeg_problem()
+
+
+@needs_ffmpeg
 def test_video_a_sticker_animado(tmp_path):
     data = make_video(tmp_path / "v.mp4", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30", "-t", "3",
                       "-pix_fmt", "yuv420p")  # fmt: skip

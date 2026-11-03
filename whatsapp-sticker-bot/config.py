@@ -38,6 +38,7 @@ class Config:
     pair_timeout: int
     log_level: str
     neonize_log_level: str
+    log_file: Path | None = None
 
     def sticker_options(self) -> StickerOptions:
         return StickerOptions(
@@ -95,13 +96,17 @@ def _level(env: Mapping[str, str], name: str, default: str) -> str:
     return value
 
 
+def _path(raw: str) -> Path:
+    path = Path(raw).expanduser()
+    return path if path.is_absolute() else BASE_DIR / path  # relativo a la carpeta del bot
+
+
 def load_config(env: Mapping[str, str] | None = None) -> Config:
     env = os.environ if env is None else env
 
     phone_raw = _get(env, "WA_PHONE_NUMBER", "")
-    session = Path(_get(env, "WA_SESSION_DB", "data/session.sqlite3")).expanduser()
-    if not session.is_absolute():
-        session = BASE_DIR / session  # relativo a la carpeta del bot, no al directorio actual
+    session = _path(_get(env, "WA_SESSION_DB", "data/session.sqlite3"))
+    log_file = _get(env, "LOG_FILE", "")
 
     command = _get(env, "STICKER_COMMAND", ".sticker")
     if not command or any(ch.isspace() for ch in command):
@@ -122,4 +127,5 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         pair_timeout=_int(env, "PAIR_TIMEOUT_SECONDS", 180, minimum=30),
         log_level=_level(env, "LOG_LEVEL", "INFO"),
         neonize_log_level=_level(env, "NEONIZE_LOG_LEVEL", "WARNING"),
+        log_file=_path(log_file) if log_file else None,
     )

@@ -21,6 +21,7 @@ import sys
 import time
 from collections.abc import Coroutine
 from dataclasses import dataclass
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Literal
 
@@ -154,7 +155,8 @@ def session_exists(path: Path) -> bool:
     if not path.exists():
         return False
     try:
-        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as db:
+        # as_uri() arma una URI válida también en Windows (file:///C:/...) y con espacios.
+        with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as db:
             return db.execute("SELECT COUNT(*) FROM whatsmeow_device").fetchone()[0] > 0
     except sqlite3.Error:
         return False
@@ -177,7 +179,8 @@ class StickerBot:
         # El nombre del cliente es la ruta del SQLite donde neonize guarda la sesión.
         # `os` es el nombre que aparece en "Dispositivos vinculados" del teléfono.
         self.client = NewAClient(
-            str(cfg.session_db),
+            # Con barras "/" (C:/...): es la forma de ruta que documenta SQLite en Windows.
+            cfg.session_db.as_posix(),
             props=DeviceProps(os="Licha.bot", platformType=DeviceProps.CHROME),
         )
         self.exit_code = EXIT_OK
@@ -370,11 +373,19 @@ class StickerBot:
 
 
 def setup_logging(cfg: Config) -> None:
+    handlers: list[logging.Handler] = []
+    if sys.stderr is not None:  # con pythonw.exe no hay consola
+        handlers.append(logging.StreamHandler())
+    if cfg.log_file is not None:
+        # Útil cuando no hay consola (tarea programada de Windows): rota a los 5 MB.
+        cfg.log_file.parent.mkdir(parents=True, exist_ok=True)
+        handlers.append(RotatingFileHandler(cfg.log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"))
     # neonize configura el logging raíz al importarse; lo reemplazamos (force=True).
     logging.basicConfig(
         level=cfg.log_level,
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=handlers or [logging.NullHandler()],
         force=True,
     )
     # Este nivel también define qué manda el core en Go (whatsmeow) al log.
@@ -403,8 +414,16 @@ def main() -> int:
         return EXIT_ERROR
 
     setup_logging(cfg)
+    problem = sticker.ffmpeg_problem()
+    if problem:
+        log.warning("ffmpeg: %s. Los stickers de imágenes andan, pero los de video van a fallar.", problem)
     cfg.session_db.parent.mkdir(parents=True, exist_ok=True)
-    return asyncio.run(StickerBot(cfg).run())
+    try:
+        return asyncio.run(StickerBot(cfg).run())
+    except KeyboardInterrupt:
+        # En Windows no hay manejadores de señales en asyncio: Ctrl+C llega como excepción.
+        log.info("Detenido con Ctrl+C.")
+        return EXIT_OK
 
 
 if __name__ == "__main__":

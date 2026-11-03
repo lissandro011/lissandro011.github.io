@@ -137,7 +137,8 @@ def test_la_media_se_copia_y_no_depende_del_evento():
 
 
 def test_session_exists(tmp_path):
-    db = tmp_path / "s.sqlite3"
+    db = tmp_path / "con espacio" / "s.sqlite3"
+    db.parent.mkdir()
     assert not bot.session_exists(db)
     with sqlite3.connect(db) as conn:
         conn.execute("CREATE TABLE whatsmeow_device (jid TEXT)")
@@ -174,6 +175,12 @@ def test_config_personalizada(tmp_path):
     assert cfg.phone == "5491123456789"
     assert cfg.session_db == tmp_path / "x.db"
     assert cfg.watermark == "" and cfg.max_video_seconds == 6 and cfg.log_level == "DEBUG"
+
+
+def test_config_log_file():
+    assert load_config({}).log_file is None
+    cfg = load_config({"LOG_FILE": "data/bot.log"})
+    assert cfg.log_file == Path(bot.__file__).resolve().parent / "data" / "bot.log"
 
 
 @pytest.mark.parametrize(
