@@ -1,0 +1,10 @@
+# Credenciales y sesión de WhatsApp: nunca al repo
+.env
+data/
+*.sqlite3
+*.sqlite3-*
+*.spr.json
+
+__pycache__/
+.venv/
+.pytest_cache/
