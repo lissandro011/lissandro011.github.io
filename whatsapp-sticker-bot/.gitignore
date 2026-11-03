@@ -8,3 +8,6 @@ data/
 __pycache__/
 .venv/
 .pytest_cache/
+
+# ffmpeg descomprimido dentro de la carpeta (Windows)
+ffmpeg*/

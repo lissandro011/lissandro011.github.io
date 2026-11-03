@@ -249,3 +249,39 @@ def test_archivo_sin_video_da_error(tmp_path):
 def test_video_corrupto_da_error(tmp_path):
     with pytest.raises(StickerError):
         sticker.video_to_sticker(b"\x00" * 1000, OPTS)
+
+
+# --------------------------------------------------------------------------- #
+# Búsqueda de ffmpeg fuera del PATH (Windows)
+# --------------------------------------------------------------------------- #
+
+
+def _fake_ffmpeg(folder):
+    folder.mkdir(parents=True)
+    exe = ".exe" if sticker.os.name == "nt" else ""
+    for name in ("ffmpeg", "ffprobe"):
+        (folder / f"{name}{exe}").write_text("")
+
+
+@pytest.mark.parametrize("relative", ["ffmpeg-8.0-essentials_build/bin", "ffmpeg-8.0/ffmpeg-8.0/bin"])
+def test_encuentra_ffmpeg_descomprimido_en_la_carpeta(tmp_path, monkeypatch, relative):
+    monkeypatch.setenv("PATH", sticker.os.environ.get("PATH", ""))  # se restaura al terminar
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setattr(sticker.shutil, "which", lambda _name: None)
+    _fake_ffmpeg(tmp_path / relative)
+    assert sticker.ensure_ffmpeg_on_path(tmp_path) == tmp_path / relative
+    assert sticker.os.environ["PATH"].startswith(str(tmp_path / relative))
+
+
+def test_encuentra_ffmpeg_instalado_con_winget(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", sticker.os.environ.get("PATH", ""))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr(sticker.shutil, "which", lambda _name: None)
+    links = tmp_path / "AppData" / "Microsoft" / "WinGet" / "Links"
+    _fake_ffmpeg(links)
+    assert sticker.ensure_ffmpeg_on_path(tmp_path / "bot") == links
+
+
+def test_no_toca_el_path_si_ffmpeg_ya_esta(tmp_path, monkeypatch):
+    monkeypatch.setattr(sticker.shutil, "which", lambda name: f"/usr/bin/{name}")
+    assert sticker.ensure_ffmpeg_on_path(tmp_path) is None

@@ -2,7 +2,8 @@
 # de systemd): arranca con la PC aunque no inicies sesión y, si el bot se cae,
 # lo vuelve a levantar en menos de 5 minutos.
 #
-# Antes: vinculá el número una vez con `python bot.py` y agregá LOG_FILE al .env.
+# Antes: instalá con 1-instalar.bat y vinculá el número una vez con 2-iniciar.bat.
+# No lo combines con 3-iniciar-con-windows.bat: serían dos bots con la misma sesión.
 # Después, en una PowerShell abierta "como administrador", desde la carpeta del bot:
 #
 #   powershell -ExecutionPolicy Bypass -File deploy\windows\instalar-tarea.ps1

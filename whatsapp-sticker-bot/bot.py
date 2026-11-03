@@ -6,15 +6,21 @@ Si no hay una sesión guardada, pide un código de vinculación (pair code) para
 el número de WA_PHONE_NUMBER y lo muestra en el log. Después la sesión queda en
 el SQLite de WA_SESSION_DB y no hace falta volver a vincular.
 
+    python bot.py --verificar    # revisa la instalación sin conectarse
+
 Códigos de salida: 0 = detenido normalmente, 1 = error, 2 = hace falta vincular
 el número (sin sesión y sin WA_PHONE_NUMBER, código vencido o sesión cerrada
-desde el teléfono).
+desde el teléfono), 3 = configuración inválida, 4 = ya hay otro bot corriendo
+con la misma sesión.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
+import os
+import platform
 import signal
 import sqlite3
 import sys
@@ -40,6 +46,8 @@ log = logging.getLogger("licha.bot")
 EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_NEEDS_PAIRING = 2
+EXIT_CONFIG = 3
+EXIT_ALREADY_RUNNING = 4
 
 GENERIC_ERROR = "No pude crear el sticker 😕 Probá de nuevo o con otro archivo."
 VIEW_ONCE_ERROR = "No hago stickers de fotos o videos de “ver una vez”."
@@ -396,7 +404,83 @@ def setup_logging(cfg: Config) -> None:
     logging.getLogger("sticker").setLevel(cfg.log_level)
 
 
-def main() -> int:
+class InstanceLock:
+    """Evita dos bots con la misma sesión: WhatsApp los desconectaría a ambos.
+
+    Usa un bloqueo del sistema operativo, que se libera solo si el proceso muere.
+    """
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._file: Any = None
+
+    def acquire(self) -> bool:
+        handle = open(self.path, "a+")  # noqa: SIM115 - queda abierto mientras corre el bot
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            handle.close()
+            return False
+        self._file = handle
+        return True
+
+    def release(self) -> None:
+        if self._file is not None:
+            self._file.close()
+            self._file = None
+
+
+def verificar(cfg: Config) -> bool:
+    """Revisa la instalación y cuenta en criollo qué falta. True si se puede arrancar."""
+    ok = True
+    print(f"   [OK] Python {platform.python_version()} y librerías instaladas")
+    problem = sticker.ffmpeg_problem()
+    if problem:
+        ok = False
+        print(f"   [!!] ffmpeg: {problem}")
+    else:
+        print("   [OK] ffmpeg, con soporte para stickers animados")
+    if session_exists(cfg.session_db):
+        print("   [OK] Número de WhatsApp ya vinculado")
+    elif cfg.phone:
+        print(f"   [OK] Número del bot: {cfg.phone} (se vincula la primera vez que inicies el bot)")
+    else:
+        ok = False
+        print("   [!!] Falta el número del bot (WA_PHONE_NUMBER en el archivo .env)")
+    return ok
+
+
+def disable_console_quick_edit() -> None:
+    """En la consola clásica de Windows, un clic adentro congela el programa
+    (modo "Seleccionar") hasta apretar una tecla. Lo desactivamos."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.GetStdHandle(-10)  # STD_INPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            ENABLE_QUICK_EDIT_MODE, ENABLE_EXTENDED_FLAGS = 0x0040, 0x0080
+            kernel32.SetConsoleMode(handle, (mode.value & ~ENABLE_QUICK_EDIT_MODE) | ENABLE_EXTENDED_FLAGS)
+    except Exception:  # sin consola o API no disponible: no es grave
+        pass
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Licha.bot: stickers para WhatsApp.")
+    parser.add_argument("--verificar", action="store_true", help="revisa la instalación y sale")
+    args = parser.parse_args(argv)
+
     try:
         from dotenv import load_dotenv
     except ImportError:
@@ -411,19 +495,31 @@ def main() -> int:
         cfg = load_config()
     except ConfigError as exc:
         print(f"Error de configuración: {exc}", file=sys.stderr)
-        return EXIT_ERROR
+        return EXIT_CONFIG
 
+    sticker.ensure_ffmpeg_on_path()  # también lo busca fuera del PATH (Windows)
+    if args.verificar:
+        return EXIT_OK if verificar(cfg) else EXIT_ERROR
+
+    disable_console_quick_edit()
     setup_logging(cfg)
     problem = sticker.ffmpeg_problem()
     if problem:
         log.warning("ffmpeg: %s. Los stickers de imágenes andan, pero los de video van a fallar.", problem)
     cfg.session_db.parent.mkdir(parents=True, exist_ok=True)
+
+    lock = InstanceLock(cfg.session_db.with_name(cfg.session_db.name + ".lock"))
+    if not lock.acquire():
+        log.error("Ya hay otro Licha.bot abierto con esta sesión. Cerrá el otro antes de abrir este.")
+        return EXIT_ALREADY_RUNNING
     try:
         return asyncio.run(StickerBot(cfg).run())
     except KeyboardInterrupt:
         # En Windows no hay manejadores de señales en asyncio: Ctrl+C llega como excepción.
         log.info("Detenido con Ctrl+C.")
         return EXIT_OK
+    finally:
+        lock.release()
 
 
 if __name__ == "__main__":

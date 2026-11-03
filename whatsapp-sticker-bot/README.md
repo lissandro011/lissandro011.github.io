@@ -38,24 +38,15 @@ pip install -r requirements.txt
 cp .env.example .env        # y completá WA_PHONE_NUMBER
 ```
 
-Windows (PowerShell):
+Windows: si no sabés programar, seguí **[GUIA-WINDOWS.md](GUIA-WINDOWS.md)**. Son tres archivos de doble clic:
 
-```powershell
-winget install Python.Python.3.13
-winget install Gyan.FFmpeg
-# Cerrá y volvé a abrir la terminal para que tome el PATH, y verificá que
-# ffmpeg sepa hacer WebP animados (tiene que aparecer una línea):
-ffmpeg -hide_banner -encoders | findstr libwebp_anim
+- `1-instalar.bat`: busca Python (o lo instala con winget), crea el entorno, instala las librerías, busca ffmpeg (o lo instala), te pregunta el número y revisa que todo esté bien.
+- `2-iniciar.bat`: prende el bot y lo reinicia si se cae.
+- `3-iniciar-con-windows.bat`: hace que arranque solo al iniciar sesión.
 
-cd whatsapp-sticker-bot
-py -m venv .venv
-.venv\Scripts\Activate.ps1   # si da error de permisos: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-pip install -r requirements.txt
-copy .env.example .env
-notepad .env                  # completá WA_PHONE_NUMBER
-```
+En Windows no hace falta instalar libmagic: neonize trae `python-magic-bin`, que incluye la DLL. ffmpeg se busca en el PATH, en una carpeta `ffmpeg*` dentro del bot y donde lo deja winget.
 
-En Windows no hace falta instalar libmagic: neonize trae `python-magic-bin`, que incluye la DLL. Al arrancar, el bot revisa que ffmpeg tenga soporte WebP y avisa en el log si falta.
+En cualquier sistema, `python bot.py --verificar` revisa la instalación sin conectarse a WhatsApp.
 
 ## Configuración
 
@@ -76,7 +67,7 @@ Todo se configura con variables de entorno. También se puede usar un archivo `.
 | `MAX_CONCURRENT_CONVERSIONS` | `2` | Cuántas conversiones corren a la vez. |
 | `PAIR_TIMEOUT_SECONDS` | `180` | Cuánto se espera a que ingreses el código de vinculación. |
 | `LOG_LEVEL` / `NEONIZE_LOG_LEVEL` | `INFO` / `WARNING` | Nivel de log del bot y de la conexión con WhatsApp. |
-| `LOG_FILE` | (vacío) | Archivo de log además de la consola (rota a los 5 MB). Hace falta en la tarea programada de Windows. |
+| `LOG_FILE` | (vacío; `.env.example` trae `data/bot.log`) | Archivo de log además de la consola (rota a los 5 MB). |
 
 **Formato del número en Argentina:** 54 + 9 + código de área sin el 0 + número sin el 15. Por ejemplo, `5491123456789`.
 
@@ -169,7 +160,7 @@ Qué hace el servicio (`deploy/licha-sticker-bot.service`):
 
 - Arranca con la máquina, cuando hay red.
 - Si el bot se cae, lo reinicia a los 10 s.
-- No se reinicia en bucle cuando hace falta vincular (código de salida 2). En ese caso, `sudo systemctl restart licha-sticker-bot` pide un código nuevo y lo ves con `journalctl`.
+- No se reinicia en bucle cuando hace falta vincular (código de salida 2), si la configuración es inválida (3) o si ya hay otro bot con la misma sesión (4). Cuando es por vincular, `sudo systemctl restart licha-sticker-bot` pide un código nuevo y lo ves con `journalctl`.
 - Corre con un usuario sin privilegios que solo puede escribir en `data/`.
 
 Comandos útiles: `systemctl status licha-sticker-bot` y `sudo systemctl restart licha-sticker-bot` (por ejemplo, después de copiar una versión nueva de los `.py`).
@@ -197,12 +188,14 @@ Si desvinculás el bot desde el teléfono, el contenedor sale con código 2 y Do
 
 En Windows también funciona con Docker Desktop y los mismos comandos. Para que vuelva solo después de reiniciar, activá "Start Docker Desktop when you sign in" (Docker Desktop arranca recién cuando iniciás sesión).
 
-### Opción C: Windows con una tarea programada
+### Opción C: Windows
 
-Es el equivalente al servicio de systemd: arranca con la PC aunque nadie inicie sesión y, si el bot se cae, lo vuelve a levantar en menos de 5 minutos.
+La forma simple es `3-iniciar-con-windows.bat` (ver [GUIA-WINDOWS.md](GUIA-WINDOWS.md)): el bot arranca al iniciar sesión, en una ventana minimizada, y `2-iniciar.bat` lo reinicia si se cae.
 
-1. Instalá y vinculá el número a mano una vez (`python bot.py`, ver arriba). Cuando diga "Conectado a WhatsApp", cortalo con Ctrl+C.
-2. Agregá `LOG_FILE=data\bot.log` al `.env` (la tarea corre sin consola).
+Si querés que arranque **sin que nadie inicie sesión**, usá una tarea programada (no combines las dos formas). Es el equivalente al servicio de systemd: arranca con la PC y, si el bot se cae, lo vuelve a levantar en menos de 5 minutos.
+
+1. Instalá con `1-instalar.bat` y vinculá el número una vez con `2-iniciar.bat`. Cuando diga "Conectado a WhatsApp", cerrá esa ventana.
+2. Revisá que el `.env` tenga `LOG_FILE=data/bot.log` (viene así en `.env.example`), porque la tarea corre sin consola.
 3. Abrí PowerShell **como administrador**, andá a la carpeta del bot y corré:
 
    ```powershell

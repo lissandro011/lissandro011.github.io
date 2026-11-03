@@ -17,9 +17,9 @@ EnvironmentFile=/opt/licha-sticker-bot/.env
 ExecStart=/opt/licha-sticker-bot/.venv/bin/python bot.py
 Restart=on-failure
 RestartSec=10
-# Código 2 = hay que volver a vincular el número: no reiniciar en bucle
-# pidiendo códigos; hacelo a mano (ver README).
-RestartPreventExitStatus=2
+# 2 = hay que volver a vincular el número, 3 = configuración inválida,
+# 4 = ya hay otro bot con la misma sesión: reiniciar no lo arregla (ver README).
+RestartPreventExitStatus=2 3 4
 TimeoutStopSec=20
 
 # Endurecimiento: solo puede escribir en la carpeta de la sesión.

@@ -401,3 +401,38 @@ def test_sesion_cerrada_desde_el_telefono(tmp_path, caplog):
     asyncio.run(b.on_logged_out(fake, LoggedOutEv(Reason=reason)))
     assert fake.stopped == 1 and b.exit_code == bot.EXIT_NEEDS_PAIRING
     assert "LOGGED_OUT" in caplog.text
+
+
+# --------------------------------------------------------------------------- #
+# main(): verificación, configuración inválida y una sola instancia
+# --------------------------------------------------------------------------- #
+
+
+def test_una_sola_instancia(tmp_path):
+    lock_path = tmp_path / "s.sqlite3.lock"
+    first, second = bot.InstanceLock(lock_path), bot.InstanceLock(lock_path)
+    assert first.acquire()
+    assert not second.acquire()
+    first.release()
+    assert second.acquire()
+    second.release()
+
+
+def test_main_configuracion_invalida_sale_con_3(monkeypatch):
+    monkeypatch.setenv("WA_PHONE_NUMBER", "no-es-un-numero")
+    assert bot.main([]) == bot.EXIT_CONFIG
+
+
+def test_main_verificar_ok(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("WA_SESSION_DB", str(tmp_path / "s.sqlite3"))
+    monkeypatch.setenv("WA_PHONE_NUMBER", "5491123456789")
+    assert bot.main(["--verificar"]) == bot.EXIT_OK
+    out = capsys.readouterr().out
+    assert "[OK] ffmpeg" in out and "5491123456789" in out and "[!!]" not in out
+
+
+def test_main_verificar_sin_numero(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("WA_SESSION_DB", str(tmp_path / "s.sqlite3"))
+    monkeypatch.delenv("WA_PHONE_NUMBER", raising=False)
+    assert bot.main(["--verificar"]) == bot.EXIT_ERROR
+    assert "Falta el número del bot" in capsys.readouterr().out

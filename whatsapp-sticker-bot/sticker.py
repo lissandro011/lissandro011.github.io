@@ -23,6 +23,7 @@ import argparse
 import io
 import json
 import logging
+import os
 import shutil
 import struct
 import subprocess
@@ -298,6 +299,35 @@ def _require(binary: str) -> str:
     return path
 
 
+def ffmpeg_candidate_dirs(base: Path | None = None) -> list[Path]:
+    """Carpetas donde puede estar ffmpeg aunque no esté en el PATH (pensado para Windows)."""
+    base = base or Path(__file__).resolve().parent
+    dirs: list[Path] = []
+    # ZIP de ffmpeg descomprimido dentro de la carpeta del bot. "Extraer todo" de
+    # Windows suele dejar una carpeta dentro de otra, por eso los dos niveles.
+    for pattern in ("ffmpeg*/bin", "ffmpeg*/*/bin"):
+        dirs += sorted(p for p in base.glob(pattern) if p.is_dir())
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:  # `winget install Gyan.FFmpeg` deja accesos acá
+        dirs.append(Path(local_appdata) / "Microsoft" / "WinGet" / "Links")
+    return dirs
+
+
+def ensure_ffmpeg_on_path(base: Path | None = None) -> Path | None:
+    """Si ffmpeg no está en el PATH pero sí en una carpeta conocida, la agrega al PATH.
+
+    Devuelve la carpeta agregada, o None si no hizo falta o no se encontró.
+    """
+    if shutil.which("ffmpeg") and shutil.which("ffprobe"):
+        return None
+    exe = ".exe" if os.name == "nt" else ""
+    for folder in ffmpeg_candidate_dirs(base):
+        if (folder / f"ffmpeg{exe}").exists() and (folder / f"ffprobe{exe}").exists():
+            os.environ["PATH"] = str(folder) + os.pathsep + os.environ.get("PATH", "")
+            return folder
+    return None
+
+
 def ffmpeg_problem(timeout: float = 15.0) -> str | None:
     """Revisa que ffmpeg/ffprobe estén instalados y que ffmpeg sepa crear WebP animados.
 
@@ -526,6 +556,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--marca", default=StickerOptions.watermark, help='texto visible ("" para quitarlo)')
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(message)s")
+    ensure_ffmpeg_on_path()
 
     opts = StickerOptions(watermark=args.marca)
     try:
