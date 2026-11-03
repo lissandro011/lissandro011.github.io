@@ -1,0 +1,19 @@
+services:
+  bot:
+    build: .
+    image: licha-sticker-bot
+    container_name: licha-sticker-bot
+    env_file: .env
+    volumes:
+      - session:/app/data          # sesión de WhatsApp (sobrevive a reinicios y rebuilds)
+    restart: unless-stopped        # vuelve solo si se cae o si reinicia la máquina
+    init: true                     # reenvía señales y limpia procesos de ffmpeg
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  session:
