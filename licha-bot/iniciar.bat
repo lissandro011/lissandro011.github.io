@@ -19,7 +19,7 @@ echo.
 ".venv\Scripts\python.exe" main.py
 set "CODIGO=%ERRORLEVEL%"
 
-rem 0 = apagado normal, 3 = !reiniciar, 2 = hay que vincular de nuevo, otro = error
+rem 0 = apagado normal, 3 = !reiniciar o se desvinculo (se vincula solo), 2 = no se pudo vincular, otro = error
 if "%CODIGO%"=="0" goto fin
 if "%CODIGO%"=="3" goto inicio
 if "%CODIGO%"=="2" goto vincular

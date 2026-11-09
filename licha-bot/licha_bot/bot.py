@@ -36,8 +36,8 @@ log = logging.getLogger("licha.bot")
 # Códigos de salida (iniciar.bat los usa para saber si reiniciar).
 SALIDA_OK = 0
 SALIDA_ERROR = 1
-SALIDA_VINCULAR = 2  # no hay sesión, el código venció o se desvinculó desde el teléfono
-SALIDA_REINICIAR = 3  # !reiniciar
+SALIDA_VINCULAR = 2  # no se pudo pedir el código o el código venció sin usarse
+SALIDA_REINICIAR = 3  # !reiniciar, o se desvinculó desde el teléfono (se vuelve a vincular solo)
 
 # Chats donde respondemos: privados (número o LID) y grupos. Se ignoran
 # estados, listas de difusión y canales.
@@ -55,6 +55,37 @@ def sesion_guardada(archivo: Path) -> bool:
             return db.execute("SELECT COUNT(*) FROM whatsmeow_device").fetchone()[0] > 0
     except sqlite3.Error:
         return False
+
+
+def _marca_sesion_cerrada(archivo: Path) -> Path:
+    return archivo.with_name(archivo.name + ".cerrada")
+
+
+def marcar_sesion_cerrada(archivo: Path) -> None:
+    """Anota que WhatsApp desvinculó la sesión, para borrarla al próximo inicio.
+
+    No se borra en el momento porque la librería de WhatsApp todavía tiene el
+    archivo abierto (en Windows no se puede borrar un archivo en uso).
+    """
+    try:
+        _marca_sesion_cerrada(archivo).touch()
+    except OSError:
+        log.exception("No pude marcar la sesión como cerrada")
+
+
+def borrar_sesion_cerrada(archivo: Path) -> bool:
+    """Si la sesión quedó marcada como desvinculada, la borra. True si la borró."""
+    marca = _marca_sesion_cerrada(archivo)
+    if not marca.exists():
+        return False
+    for ruta in (archivo, *(archivo.with_name(archivo.name + fin) for fin in ("-wal", "-shm", "-journal"))):
+        try:
+            ruta.unlink(missing_ok=True)
+        except OSError:
+            log.exception("No pude borrar %s; borralo a mano y volvé a iniciar el bot", ruta)
+            return False
+    marca.unlink(missing_ok=True)
+    return True
 
 
 def _silenciar_aviso_ffmpeg() -> None:
@@ -86,6 +117,8 @@ class LichaBot:
         # El primer parámetro es el archivo SQLite donde neonize guarda la sesión.
         # `os` es el nombre que aparece en "Dispositivos vinculados" del teléfono.
         self.config.archivo_sesion.parent.mkdir(parents=True, exist_ok=True)
+        if borrar_sesion_cerrada(self.config.archivo_sesion):
+            log.info("Borré la sesión vieja que WhatsApp había desvinculado; ahora se vincula de nuevo.")
         cliente = NewAClient(
             str(self.config.archivo_sesion),
             props=DeviceProps(os=self.config.nombre, platformType=DeviceProps.CHROME),
@@ -252,10 +285,12 @@ class LichaBot:
     async def _al_cerrar_sesion(self, _: NewAClient, ev: LoggedOutEv) -> None:
         motivo = LoggedOutEv.DESCRIPTOR.fields_by_name["Reason"].enum_type.values_by_number.get(ev.Reason)
         log.error(
-            "WhatsApp cerró la sesión (%s): el bot se desvinculó. Volvé a iniciarlo para vincularlo de nuevo.",
+            "WhatsApp cerró la sesión (%s): el bot se desvinculó. Borro la sesión vieja y me reinicio "
+            "para vincularlo de nuevo.",
             motivo.name if motivo else ev.Reason,
         )
-        await self.detener(SALIDA_VINCULAR)
+        marcar_sesion_cerrada(self.config.archivo_sesion)
+        await self.detener(SALIDA_REINICIAR)
 
     # -- mensajes ----------------------------------------------------------- #
 
@@ -273,19 +308,40 @@ class LichaBot:
         segundos = marca / 1000 if marca > 10**11 else marca  # neonize puede mandarlo en ms
         return time.time() - segundos > limite * 60
 
+    def _motivo_para_ignorar(self, ev: MessageEv) -> str:
+        """Por qué no hay que contestar este mensaje ("" si hay que contestarlo)."""
+        fuente = ev.Info.MessageSource
+        cfg = self.config
+        if fuente.IsFromMe:
+            return (
+                "lo mandó el mismo número del bot. Los comandos se escriben desde OTRO número "
+                "(no desde el celular con el chip del bot)"
+            )
+        if ev.IsEdit:
+            return "es un mensaje editado"
+        if fuente.Chat.Server not in SERVIDORES_PERMITIDOS:
+            return f"viene de un chat que no es privado ni grupo ({fuente.Chat.Server})"
+        if fuente.IsGroup and not cfg.responder_en_grupos:
+            return "es de un grupo y responder_en_grupos = false en config.toml"
+        if not fuente.IsGroup and not cfg.responder_en_privado:
+            return "es privado y responder_en_privado = false en config.toml"
+        if self._es_viejo(ev):
+            return (
+                f"es de hace más de {cfg.ignorar_mensajes_de_mas_de_minutos} minutos "
+                "(¿la hora de la PC está bien?)"
+            )
+        return ""
+
     async def procesar(self, ev: MessageEv) -> None:
         """Decide qué hacer con un mensaje: comando, oyentes o nada."""
         fuente = ev.Info.MessageSource
         cfg = self.config
-        if fuente.IsFromMe or ev.IsEdit or fuente.Chat.Server not in SERVIDORES_PERMITIDOS:
-            return
-        if (fuente.IsGroup and not cfg.responder_en_grupos) or (not fuente.IsGroup and not cfg.responder_en_privado):
-            return
-        if self._es_viejo(ev):
-            log.debug("Ignoro el mensaje viejo %s", ev.Info.ID)
-            return
-
         pedido = parsear_comando(texto_de(ev.Message), cfg.prefijos)
+        motivo = self._motivo_para_ignorar(ev)
+        if motivo:
+            # Si parecía un comando, se avisa en la ventana para que se entienda por qué no contestó.
+            (log.info if pedido is not None else log.debug)("Ignoro %s: %s", ev.Info.ID, motivo)
+            return
         if pedido is not None:
             prefijo, nombre, resto = pedido
             cmd = self.registro.buscar(nombre)

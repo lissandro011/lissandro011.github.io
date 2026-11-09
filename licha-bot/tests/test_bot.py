@@ -5,11 +5,12 @@ por uno falso que anota todo lo que el bot manda.
 """
 
 import asyncio
+import dataclasses
 import time
 
 import pytest
 from conftest import foto, gif
-from neonize.aioze.events import MessageEv
+from neonize.aioze.events import LoggedOutEv, MessageEv
 from neonize.proto.Neonize_pb2 import UploadResponse
 from neonize.proto.waE2E.WAWebProtobufsE2E_pb2 import (
     ContextInfo,
@@ -23,7 +24,7 @@ from neonize.proto.waE2E.WAWebProtobufsE2E_pb2 import (
     VideoMessage,
 )
 
-from licha_bot.bot import SALIDA_ERROR, SALIDA_REINICIAR, LichaBot
+from licha_bot.bot import SALIDA_ERROR, SALIDA_REINICIAR, LichaBot, borrar_sesion_cerrada
 from licha_bot.comandos import REGISTRO, Registro, cargar_comandos
 from licha_bot.config import desde_dict
 from licha_bot.conversor import inspeccionar_webp
@@ -164,6 +165,26 @@ def test_reiniciar_devuelve_su_codigo_de_salida():
     assert cliente.detenido
 
 
+def test_al_desvincularse_se_reinicia_y_borra_la_sesion_vieja(tmp_path):
+    sesion = tmp_path / "sesion.sqlite3"
+    sesion.write_bytes(b"vieja")
+    (tmp_path / "sesion.sqlite3-wal").write_bytes(b"wal")
+    bot, cliente = crear_bot()
+    bot.config = dataclasses.replace(bot.config, archivo_sesion=sesion)
+
+    async def correr():
+        tarea = asyncio.create_task(bot.ejecutar())
+        await asyncio.sleep(0.01)
+        await bot._al_cerrar_sesion(cliente, LoggedOutEv(Reason="LOGGED_OUT"))
+        return await tarea
+
+    assert asyncio.run(correr()) == SALIDA_REINICIAR
+    assert sesion.exists()  # todavía en uso: se borra al próximo inicio
+    assert borrar_sesion_cerrada(sesion)
+    assert list(tmp_path.iterdir()) == []
+    assert not borrar_sesion_cerrada(sesion)  # sin marca no toca nada
+
+
 # --------------------------------------------------------------------------- #
 # Lectura de mensajes
 # --------------------------------------------------------------------------- #
@@ -295,6 +316,14 @@ def test_mensajes_ignorados(kw):
     bot, cliente = crear_bot()
     procesar(bot, evento(texto("!ping"), **kw))
     assert cliente.respuestas == [] and cliente.enviados == []
+
+
+def test_comando_desde_el_numero_del_bot_explica_por_que_no_contesta(caplog):
+    bot, cliente = crear_bot()
+    with caplog.at_level("INFO", logger="licha.bot"):
+        procesar(bot, evento(texto("!menu"), propio=True))
+    assert cliente.respuestas == []
+    assert "OTRO número" in caplog.text
 
 
 def test_saludo_por_privado_una_sola_vez():
