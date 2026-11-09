@@ -1,5 +1,0 @@
-# Probado con estas versiones (Python 3.10+). Además hacen falta en el sistema:
-# ffmpeg/ffprobe (con libwebp) y libmagic (lo usa neonize). Ver README.md.
-neonize==0.9.0
-Pillow>=10.1
-python-dotenv>=1.0

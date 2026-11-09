@@ -1,0 +1,3 @@
+# Los .bat se guardan con fin de línea de Windows (CRLF) tal cual, sin conversión:
+# cmd.exe falla con algunos saltos de línea de Linux.
+*.bat -text
