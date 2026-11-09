@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from .contexto import Contexto
 
 NOMBRE = "Licha Bot"
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 __all__ = ["NOMBRE", "REGISTRO", "Comando", "Contexto", "ErrorUsuario", "comando", "escuchar", "__version__"]
 

@@ -31,6 +31,46 @@ def preparar_consola() -> None:
             flujo.reconfigure(errors="replace")  # type: ignore[union-attr]
         except (AttributeError, ValueError):
             pass
+    if sys.platform == "win32":
+        desactivar_seleccion_rapida()
+
+
+def desactivar_seleccion_rapida() -> None:
+    """Evita que el bot se congele si alguien hace clic en la ventana.
+
+    En la consola clásica de Windows, un clic activa el modo "Seleccionar" y el
+    programa queda trabado hasta apretar Esc. Sacamos ese modo (se puede seguir
+    copiando texto con clic derecho en la barra de título > Editar > Marcar).
+    """
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        entrada = kernel32.GetStdHandle(-10)  # STD_INPUT_HANDLE
+        modo = ctypes.c_uint32()
+        if not kernel32.GetConsoleMode(entrada, ctypes.byref(modo)):
+            return  # no es una consola (por ejemplo, salida redirigida)
+        seleccion_rapida, banderas_extendidas = 0x0040, 0x0080
+        kernel32.SetConsoleMode(entrada, (modo.value | banderas_extendidas) & ~seleccion_rapida)
+    except Exception:
+        pass
+
+
+class OcultarAvisosNormales(logging.Filter):
+    """Oculta avisos de la conexión que parecen errores pero son normales.
+
+    Por ejemplo, justo después de vincular WhatsApp corta la conexión a propósito
+    y la librería reconecta sola: eso deja un "Error sending close to websocket".
+    Con nivel DEBUG se muestran igual.
+    """
+
+    TEXTOS = ("Error sending close to websocket",)
+
+    def filter(self, registro: logging.LogRecord) -> bool:
+        if logging.getLogger().level <= logging.DEBUG:
+            return True
+        mensaje = registro.getMessage()
+        return not any(texto in mensaje for texto in self.TEXTOS)
 
 
 def configurar_logs(config: Config) -> None:
@@ -45,6 +85,7 @@ def configurar_logs(config: Config) -> None:
         raiz.removeHandler(manejador)
     for manejador in (consola, archivo):
         manejador.setFormatter(formato)
+        manejador.addFilter(OcultarAvisosNormales())
         raiz.addHandler(manejador)
     raiz.setLevel(config.nivel_log)
 

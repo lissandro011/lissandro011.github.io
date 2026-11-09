@@ -83,8 +83,8 @@ duenos = ["5491198765432"]    # TU número personal
 2. En el **celular con el chip del bot**, abrí WhatsApp:
    - **Android:** ⋮ (arriba a la derecha) > **Dispositivos vinculados** > **Vincular un dispositivo** > abajo, **Vincular con el número de teléfono**.
    - **iPhone:** **Configuración** > **Dispositivos vinculados** > **Vincular un dispositivo** > **Vincular con el número de teléfono**.
-3. Escribí el código de 8 caracteres que muestra la ventana. Tenés 3 minutos. Si se vence, cerrá la ventana y abrí `iniciar.bat` de nuevo.
-4. Cuando la ventana diga **"✅ Licha Bot está conectado y escuchando"**, ya está. La sesión queda guardada y la próxima vez arranca directo, sin código.
+3. Escribí el código de 8 caracteres que muestra la ventana (no hagas clic dentro de la ventana). Tenés unos 2 minutos. Si se vence, cerrá la ventana y abrí `iniciar.bat` de nuevo.
+4. Cuando la ventana diga **"✅ Licha Bot está conectado y escuchando"**, ya está. Puede que antes se reinicie solo una vez, es normal. La sesión queda guardada y la próxima vez arranca directo, sin código.
 
 > Si dejás `numero` vacío, en lugar del código aparece un **QR** (en la ventana y en la imagen `datos\qr.png`) para escanear desde **Dispositivos vinculados** > **Vincular un dispositivo**.
 
@@ -180,8 +180,12 @@ Si un comando necesita otra librería de Python, instalala dentro del entorno de
 
 **"No pude conectarme a WhatsApp"**: la PC no tiene internet o algo bloquea la conexión (un firewall o un proxy). El bot reintenta solo cada 15 segundos.
 
+**Después de vincular aparece `Error sending close to websocket ... EOF`**: es normal. Justo después de vincular, WhatsApp corta la conexión a propósito y el bot reconecta solo. Esperá el mensaje "✅ Licha Bot está conectado". (Desde la versión 1.0.1 ese aviso ya no se muestra).
+
 **El bot no contesta**:
-- ¿Le escribiste desde otro número? El bot ignora los mensajes que salen de su propio número.
+- ¿La barra de título de la ventana dice **"Seleccionar"**? Si hacés clic dentro de la ventana (por ejemplo, para copiar un texto), Windows congela el programa hasta que apretás **Esc**. Desde la versión 1.0.1 el bot desactiva ese modo solo.
+- ¿Apareció "✅ Licha Bot está conectado"? Si no, cerrá la ventana y abrí `iniciar.bat` de nuevo: con la sesión ya guardada conecta directo.
+- ¿Le escribiste desde otro número? El bot ignora los mensajes que salen de su propio número (en la ventana aparece "Ignoro ... porque salió del número del bot").
 - ¿Usaste el prefijo? Es `!menu`, no `menu`.
 - En grupos, fijate que `responder_en_grupos = true`.
 - Si estuvo apagado, no responde mensajes de más de 10 minutos (`ignorar_mensajes_de_mas_de_minutos`).
