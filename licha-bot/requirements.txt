@@ -1,0 +1,6 @@
+# Dependencias de Licha Bot (las instala instalar.bat).
+# neonize trae la conexión con WhatsApp (y en Windows instala python-magic-bin solo).
+# Pillow y PyAV hacen los stickers: PyAV ya incluye FFmpeg, no hay que instalar nada aparte.
+neonize==0.10.0
+Pillow>=11.1,<14
+av>=14,<20

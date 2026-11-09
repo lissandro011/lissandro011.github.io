@@ -1,0 +1,81 @@
+# ============================================================================
+#  Configuración de Licha Bot
+#  Abrí este archivo con el Bloc de notas, cambiá lo que necesites y guardalo.
+#  Los textos van entre comillas. Las líneas que empiezan con # son comentarios.
+#  Después de cambiar algo, reiniciá el bot.
+# ============================================================================
+
+[bot]
+nombre = "Licha Bot"
+
+# Número del chip del bot, en formato internacional, solo números y sin "+".
+# Se usa para vincular el bot con un código (la primera vez).
+# Argentina: 54 + 9 + código de área sin el 0 + número sin el 15.
+#   Ejemplo: (011) 15 2345-6789  ->  "5491123456789"
+numero = ""
+
+# Números que pueden usar los comandos de dueño (!reiniciar, !apagar).
+# Poné TU número personal (no el del bot), con el mismo formato.
+#   Ejemplo: duenos = ["5491198765432"]
+#   Varios:  duenos = ["5491198765432", "5493415551234"]
+duenos = []
+
+# Con qué empiezan los comandos. Con ["!", "."] sirven !sticker y .sticker
+prefijos = ["!", "."]
+
+responder_en_grupos = true
+responder_en_privado = true
+
+# Segundos que tiene que esperar cada persona entre un comando y otro (anti-spam).
+espera_entre_comandos = 3
+
+# Si el bot estuvo apagado, no contesta mensajes más viejos que esto (en minutos).
+ignorar_mensajes_de_mas_de_minutos = 10
+
+# Por privado, avisar cuando alguien escribe un comando que no existe.
+avisar_comando_desconocido = true
+
+# Por privado, si alguien escribe algo que no es un comando (por ejemplo "hola"),
+# explicarle cómo usar el bot (como máximo una vez cada 6 horas por persona).
+saludar_por_privado = true
+
+# Cuántos stickers (o tareas pesadas) se procesan a la vez.
+tareas_pesadas_simultaneas = 2
+
+
+[stickers]
+# Lo que muestra WhatsApp al tocar un sticker: nombre del paquete y autor.
+paquete = "Licha Bot"
+autor = "Licha Bot"
+
+# Texto chiquito que se dibuja en una esquina de cada sticker.
+# Para no dibujar nada, dejalo vacío: marca_de_agua = ""
+marca_de_agua = "Licha Bot"
+
+# Por privado, cualquier foto, video o GIF que le manden vuelve como sticker
+# (sin escribir !sticker). En los grupos siempre hace falta el comando.
+automatico_en_privado = true
+
+# Los videos más largos se cortan a esta cantidad de segundos.
+max_segundos_video = 10
+
+# Archivos más pesados que esto (en MB) no se descargan.
+max_mb_descarga = 25
+
+
+[registro]
+# Cuánto detalle se muestra en la ventana y en logs\licha-bot.log:
+# DEBUG (todo), INFO (normal), WARNING (solo avisos), ERROR (solo errores)
+nivel = "INFO"
+# Detalle de la conexión con WhatsApp (dejalo en WARNING salvo que haya problemas).
+nivel_whatsapp = "WARNING"
+
+
+# ----------------------------------------------------------------------------
+# Tus comandos nuevos pueden tener su propia sección acá abajo, por ejemplo:
+#
+# [eco]
+# emoji = "🦜"
+#
+# y leerla con ctx.config.seccion("eco") (ver comandos\_plantilla.py).
+# ----------------------------------------------------------------------------

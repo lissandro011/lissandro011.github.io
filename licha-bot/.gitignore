@@ -1,0 +1,8 @@
+# Instalación y datos locales: nunca al repositorio
+.venv/
+config.toml
+datos/
+logs/
+
+__pycache__/
+.pytest_cache/
