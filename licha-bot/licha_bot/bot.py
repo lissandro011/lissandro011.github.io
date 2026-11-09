@@ -308,19 +308,40 @@ class LichaBot:
         segundos = marca / 1000 if marca > 10**11 else marca  # neonize puede mandarlo en ms
         return time.time() - segundos > limite * 60
 
+    def _motivo_para_ignorar(self, ev: MessageEv) -> str:
+        """Por qué no hay que contestar este mensaje ("" si hay que contestarlo)."""
+        fuente = ev.Info.MessageSource
+        cfg = self.config
+        if fuente.IsFromMe:
+            return (
+                "lo mandó el mismo número del bot. Los comandos se escriben desde OTRO número "
+                "(no desde el celular con el chip del bot)"
+            )
+        if ev.IsEdit:
+            return "es un mensaje editado"
+        if fuente.Chat.Server not in SERVIDORES_PERMITIDOS:
+            return f"viene de un chat que no es privado ni grupo ({fuente.Chat.Server})"
+        if fuente.IsGroup and not cfg.responder_en_grupos:
+            return "es de un grupo y responder_en_grupos = false en config.toml"
+        if not fuente.IsGroup and not cfg.responder_en_privado:
+            return "es privado y responder_en_privado = false en config.toml"
+        if self._es_viejo(ev):
+            return (
+                f"es de hace más de {cfg.ignorar_mensajes_de_mas_de_minutos} minutos "
+                "(¿la hora de la PC está bien?)"
+            )
+        return ""
+
     async def procesar(self, ev: MessageEv) -> None:
         """Decide qué hacer con un mensaje: comando, oyentes o nada."""
         fuente = ev.Info.MessageSource
         cfg = self.config
-        if fuente.IsFromMe or ev.IsEdit or fuente.Chat.Server not in SERVIDORES_PERMITIDOS:
-            return
-        if (fuente.IsGroup and not cfg.responder_en_grupos) or (not fuente.IsGroup and not cfg.responder_en_privado):
-            return
-        if self._es_viejo(ev):
-            log.debug("Ignoro el mensaje viejo %s", ev.Info.ID)
-            return
-
         pedido = parsear_comando(texto_de(ev.Message), cfg.prefijos)
+        motivo = self._motivo_para_ignorar(ev)
+        if motivo:
+            # Si parecía un comando, se avisa en la ventana para que se entienda por qué no contestó.
+            (log.info if pedido is not None else log.debug)("Ignoro %s: %s", ev.Info.ID, motivo)
+            return
         if pedido is not None:
             prefijo, nombre, resto = pedido
             cmd = self.registro.buscar(nombre)

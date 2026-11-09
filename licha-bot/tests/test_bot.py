@@ -318,6 +318,14 @@ def test_mensajes_ignorados(kw):
     assert cliente.respuestas == [] and cliente.enviados == []
 
 
+def test_comando_desde_el_numero_del_bot_explica_por_que_no_contesta(caplog):
+    bot, cliente = crear_bot()
+    with caplog.at_level("INFO", logger="licha.bot"):
+        procesar(bot, evento(texto("!menu"), propio=True))
+    assert cliente.respuestas == []
+    assert "OTRO número" in caplog.text
+
+
 def test_saludo_por_privado_una_sola_vez():
     import comandos.general
 
