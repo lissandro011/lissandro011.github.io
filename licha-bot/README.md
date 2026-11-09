@@ -117,6 +117,11 @@ Los comandos funcionan con `!` o con `.` adelante (`!s` y `.s` son lo mismo). Se
 | `!s recortar` | Igual, pero recorta al centro y llena el cuadrado (sin bordes transparentes). |
 | `!s Mi pack \| Mi nombre` | Cambia el nombre del paquete y el autor que muestra WhatsApp al tocar el sticker. |
 | `!imagen` · `!toimg` | Respondiendo a un sticker, lo devuelve como foto. |
+| `!dado` · `!dado 20` · `!dado 2d6` | Tira un dado (de 6 caras, de las que digas, o varios juntos). |
+| `!moneda` | Cara o cruz. |
+| `!8ball ¿pregunta?` | La bola 8 mágica responde sí, no o quizás. |
+| `!elegir pizza, empanadas o sushi` | Elige una opción al azar para decidir. Separá con comas, `\|`, "o" o espacios. |
+| `!top5 más dormilones` | (Solo grupos) Ranking en broma: etiqueta a 5 integrantes al azar. `!top 3 ...` cambia la cantidad (de 2 a 10). |
 | `!menu` · `!ayuda` | Lista de comandos. `!ayuda sticker` explica uno en detalle. |
 | `!ping` | Muestra si el bot está funcionando y hace cuánto. |
 | `!reiniciar` | (Solo dueños) Reinicia el bot, por ejemplo para cargar comandos nuevos. |
@@ -129,7 +134,7 @@ Por privado, cualquier foto, video o GIF se convierte en sticker sin escribir na
 ## Agregar comandos nuevos
 
 1. En la carpeta `comandos`, copiá **`_plantilla.py`** y ponele otro nombre **sin el guion bajo** adelante, por ejemplo `diversion.py`. Los archivos que empiezan con `_` no se cargan.
-2. Editalo con el Bloc de notas (o mejor, con [Visual Studio Code](https://code.visualstudio.com/)). La plantilla trae ejemplos que funcionan (`!dado`, `!eco`, `!girar` y `!anuncio`) y la lista de todo lo que se puede usar.
+2. Editalo con el Bloc de notas (o mejor, con [Visual Studio Code](https://code.visualstudio.com/)). La plantilla trae ejemplos que funcionan (`!numero`, `!eco`, `!girar` y `!anuncio`) y la lista de todo lo que se puede usar.
 3. Reiniciá el bot: cerrá la ventana y abrí `iniciar.bat`, o mandale `!reiniciar` desde un número de dueño.
 4. El comando aparece solo en `!menu`.
 
@@ -215,6 +220,7 @@ licha-bot/
 ├── comandos/                        ← TUS COMANDOS: cada .py se carga solo
 │   ├── stickers.py                  !sticker, !imagen y stickers automáticos
 │   ├── general.py                   !menu, !ping
+│   ├── diversion.py                 !dado, !moneda, !8ball, !elegir, !top5
 │   ├── dueno.py                     !reiniciar, !apagar
 │   └── _plantilla.py                ejemplos para copiar (no se carga)
 ├── licha_bot/                       el motor del bot

@@ -8,7 +8,14 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from neonize.aioze.events import MessageEv
-from neonize.proto.waE2E.WAWebProtobufsE2E_pb2 import ContextInfo, ImageMessage, Message, StickerMessage
+from neonize.proto.Neonize_pb2 import JID
+from neonize.proto.waE2E.WAWebProtobufsE2E_pb2 import (
+    ContextInfo,
+    ExtendedTextMessage,
+    ImageMessage,
+    Message,
+    StickerMessage,
+)
 from neonize.utils.enum import MediaType
 from neonize.utils.jid import Jid2String, JIDToNonAD, jid_is_lid
 
@@ -72,6 +79,8 @@ class Contexto:
         ctx.responder("texto")              responde citando el mensaje
         ctx.enviar("texto")                 manda un mensaje sin citar
         ctx.reaccionar("👍")                reacciona al mensaje ("" la quita)
+        ctx.responder_mencionando(t, jids)  responde etiquetando a esas personas
+        ctx.integrantes()                   integrantes del grupo (sin el bot)
         ctx.enviar_sticker(webp, animado)   manda un sticker
         ctx.enviar_imagen(jpeg, "pie")      manda una foto
         ctx.descargar(media)                baja la foto/video que mandaron
@@ -138,6 +147,41 @@ class Contexto:
             await self.cliente.send_message(self.chat, reaccion)
         except Exception:
             log.debug("No pude reaccionar con %r", emoji, exc_info=True)
+
+    @staticmethod
+    def mencion(jid: JID) -> str:
+        """Texto que etiqueta a alguien ("@549..."). Va junto con responder_mencionando."""
+        return f"@{jid.User}"
+
+    async def responder_mencionando(self, texto: str, jids: list[JID]) -> None:
+        """Responde citando el mensaje y etiquetando a `jids` (usá ctx.mencion(jid) en el texto)."""
+        contexto = contexto_de_respuesta(self.evento)
+        contexto.mentionedJID.extend(Jid2String(JIDToNonAD(j)) for j in jids)
+        mensaje = Message(extendedTextMessage=ExtendedTextMessage(text=texto, contextInfo=contexto))
+        await self.cliente.send_message(self.chat, mensaje)
+
+    async def integrantes(self) -> list[JID]:
+        """Integrantes del grupo, sin contar al bot. Fuera de un grupo devuelve una lista vacía."""
+        if not self.es_grupo:
+            return []
+        try:
+            info = await self.cliente.get_group_info(self.chat)
+        except Exception as exc:
+            raise ErrorUsuario(
+                "No pude ver quiénes están en el grupo 😕 Probá de nuevo en un rato.",
+                f"get_group_info falló: {exc!r}",
+            ) from exc
+        propios: set[str] = set()
+        try:
+            yo = await self.cliente.get_me()
+            propios = {yo.JID.User, yo.LID.User} - {""}
+        except Exception:
+            log.debug("No pude saber el número del bot", exc_info=True)
+        return [
+            p.JID
+            for p in info.Participants
+            if p.JID.User and not ({p.JID.User, p.LID.User, p.PhoneNumber.User} & propios)
+        ]
 
     async def enviar_sticker(self, webp: bytes, animado: bool = False, citar: bool = True) -> None:
         """Manda un sticker WebP de 512x512 (por ejemplo, el de conversor.crear_sticker)."""

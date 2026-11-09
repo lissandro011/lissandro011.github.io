@@ -10,7 +10,7 @@ import time
 import pytest
 from conftest import foto, gif
 from neonize.aioze.events import MessageEv
-from neonize.proto.Neonize_pb2 import UploadResponse
+from neonize.proto.Neonize_pb2 import JID, Device, GroupInfo, GroupParticipant, UploadResponse
 from neonize.proto.waE2E.WAWebProtobufsE2E_pb2 import (
     ContextInfo,
     DocumentMessage,
@@ -31,6 +31,7 @@ from licha_bot.mensajes import buscar_media, parsear_comando, texto_de
 
 DUENO = "5491111111111"
 OTRO = "5492222222222"
+BOT = "5490000000000"
 
 
 # --------------------------------------------------------------------------- #
@@ -76,6 +77,7 @@ def evento(msg: Message, *, de=OTRO, grupo=False, propio=False, server=None, ts=
 class ClienteFalso:
     def __init__(self, descarga: bytes = b"", error_al_conectar: Exception | None = None):
         self.descarga = descarga
+        self.integrantes: list[GroupParticipant] = []
         self.error_al_conectar = error_al_conectar
         self._parado = asyncio.Event()
         self.respuestas: list[str] = []
@@ -101,6 +103,12 @@ class ClienteFalso:
     async def download_any(self, message):
         self.descargados.append(message)
         return self.descarga
+
+    async def get_group_info(self, jid):
+        return GroupInfo(JID=jid, Participants=self.integrantes)
+
+    async def get_me(self):
+        return Device(JID=JID(User=BOT, Server="s.whatsapp.net"), LID=JID(User="99", Server="lid"))
 
     async def connect(self):
         if self.error_al_conectar:
@@ -216,7 +224,8 @@ def test_buscar_media_directa_citada_y_documento():
 def test_se_cargan_los_comandos_de_la_carpeta():
     nombres = {c.nombre for c in REGISTRO.todos()}
     assert {"sticker", "imagen", "menu", "ping", "reiniciar", "apagar"} <= nombres
-    assert "dado" not in nombres  # _plantilla.py no se carga
+    assert {"dado", "moneda", "8ball", "elegir", "top5"} <= nombres
+    assert "numero" not in nombres  # _plantilla.py no se carga
     assert REGISTRO.buscar("S").nombre == "sticker"
     assert REGISTRO.buscar("menú").nombre == "menu"  # sin importar tildes ni mayúsculas
 
@@ -423,3 +432,100 @@ def test_imagen_sin_sticker_explica_como_usarlo():
     bot, cliente = crear_bot()
     procesar(bot, evento(respuesta("!imagen", imagen())))
     assert "Respondé a un sticker" in cliente.respuestas[0]
+
+
+# --------------------------------------------------------------------------- #
+# Diversión
+# --------------------------------------------------------------------------- #
+
+
+def test_leer_dados():
+    from comandos.diversion import leer_dados
+
+    assert leer_dados("") == (1, 6)
+    assert leer_dados("20") == (1, 20)
+    assert leer_dados("2d6") == (2, 6)
+    assert leer_dados("D12") == (1, 12)
+    for malo in ("1", "abc", "11d6", "2d1", "d5000"):
+        with pytest.raises(ValueError):
+            leer_dados(malo)
+
+
+def test_dado_moneda_y_8ball():
+    bot, cliente = crear_bot()
+    for t in ("!dado", "!dado 2d6", "!dado banana", "!moneda", "!8ball ¿Llueve?", "!8ball"):
+        procesar(bot, evento(texto(t)))
+    dado, dos_dados, malo, mon, bola, sin_pregunta = cliente.respuestas
+    assert dado.startswith("🎲 Salió") and 1 <= int(dado.split("*")[1]) <= 6
+    assert "+" in dos_dados and 2 <= int(dos_dados.split("*")[1]) <= 12
+    assert "No entendí" in malo
+    assert "cara" in mon or "cruz" in mon
+    assert bola.startswith("🎱")
+    assert "pregunta" in sin_pregunta
+
+
+@pytest.mark.parametrize(
+    "t, esperado",
+    [
+        ("pizza, empanadas o sushi", ["pizza", "empanadas", "sushi"]),
+        ("ir | quedarse", ["ir", "quedarse"]),
+        ("rojo azul verde", ["rojo", "azul", "verde"]),
+        ("¿Netflix o dormir?", ["Netflix", "dormir"]),
+        ("comida china, comida china, Comida China", ["comida china"]),
+        ("siete u ocho", ["siete", "ocho"]),
+        ("solo", ["solo"]),
+    ],
+)
+def test_leer_opciones(t, esperado):
+    from comandos.diversion import leer_opciones
+
+    assert leer_opciones(t) == esperado
+
+
+def test_elegir():
+    bot, cliente = crear_bot()
+    procesar(bot, evento(texto("!elegir pizza, empanadas o sushi")))
+    procesar(bot, evento(texto("!elegir pizza")))
+    elegido, error = cliente.respuestas
+    assert elegido.split("*")[1] in {"pizza", "empanadas", "sushi"}
+    assert "al menos dos" in error
+
+
+def integrante(numero: str) -> GroupParticipant:
+    return GroupParticipant(JID=JID(User=numero, Server="s.whatsapp.net"))
+
+
+def test_top5_etiqueta_integrantes_sin_el_bot():
+    bot, cliente = crear_bot()
+    numeros = [f"54911000000{i:02d}" for i in range(8)]
+    cliente.integrantes = [integrante(BOT)] + [integrante(n) for n in numeros]
+    procesar(bot, evento(texto("!top5 más dormilones"), grupo=True))
+    (_, mensaje) = cliente.enviados[0]
+    ext = mensaje.extendedTextMessage
+    assert ext.text.startswith("🏆 *Top 5: más dormilones*")
+    assert ext.contextInfo.stanzaID == "MSG1"  # responde citando
+    mencionados = list(ext.contextInfo.mentionedJID)
+    assert len(mencionados) == len(set(mencionados)) == 5
+    assert all(m.split("@")[0] in numeros and f"@{m.split('@')[0]}" in ext.text for m in mencionados)
+
+
+def test_top_con_cantidad_y_grupo_chico():
+    bot, cliente = crear_bot()
+    cliente.integrantes = [integrante("5491100000001"), integrante("5491100000002")]
+    procesar(bot, evento(texto("!top 3 mejores cocineros"), grupo=True))
+    ext = cliente.enviados[0][1].extendedTextMessage
+    assert ext.text.startswith("🏆 *Top 2: mejores cocineros*")
+    assert len(ext.contextInfo.mentionedJID) == 2
+
+
+def test_top_errores():
+    bot, cliente = crear_bot()
+    procesar(bot, evento(texto("!top5"), grupo=True))
+    procesar(bot, evento(texto("!top 50 algo"), grupo=True))
+    procesar(bot, evento(texto("!top5 algo"), grupo=True))  # grupo sin integrantes
+    procesar(bot, evento(texto("!top5 algo")))  # por privado
+    sin_titulo, muchos, vacio, privado = cliente.respuestas
+    assert "de qué es el top" in sin_titulo
+    assert "de 2 a 10" in muchos
+    assert "No encontré a nadie" in vacio
+    assert "solo funciona en grupos" in privado
