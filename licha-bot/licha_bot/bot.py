@@ -43,7 +43,10 @@ SALIDA_REINICIAR = 3  # !reiniciar
 # estados, listas de difusión y canales.
 SERVIDORES_PERMITIDOS = frozenset({"s.whatsapp.net", "lid", "g.us"})
 ERROR_GENERICO = "Algo salió mal con ese comando 😕 Probá de nuevo en un rato."
-TIEMPO_PARA_VINCULAR = 180  # segundos para ingresar el código en el teléfono
+# WhatsApp corta la vinculación unos 2 minutos y medio después de pedir el código.
+TIEMPO_PARA_VINCULAR = 180  # segundos que esperamos antes de rendirnos
+ESPERA_TRAS_VINCULAR = 15  # si la sesión ya se guardó pero el bot no arrancó, reinicia
+INTERVALO_VIGILANCIA = 5  # cada cuántos segundos se revisa la vinculación
 
 
 def sesion_guardada(archivo: Path) -> bool:
@@ -150,13 +153,17 @@ class LichaBot:
     # -- vinculación -------------------------------------------------------- #
 
     async def _al_recibir_qr(self, cliente: NewAClient, qr: bytes) -> None:
-        # neonize solo manda un QR cuando no hay sesión guardada.
+        # neonize solo manda un QR cuando no hay sesión guardada. El QR se renueva
+        # cada ~20 s: el código de vinculación se pide una sola vez.
+        primera_vez = not self._codigo_pedido
+        self._codigo_pedido = True
+        if primera_vez:
+            self._en_segundo_plano(self._esperar_vinculacion())
         if self.config.numero:
-            if not self._codigo_pedido:
-                self._codigo_pedido = True  # el QR se renueva cada ~20 s; pedimos un solo código
+            if primera_vez:
                 await self._pedir_codigo(cliente)
             return
-        self._mostrar_qr(qr)
+        self._mostrar_qr(qr, abrir=primera_vez)
 
     async def _pedir_codigo(self, cliente: NewAClient) -> None:
         try:
@@ -179,12 +186,11 @@ class LichaBot:
             "  En el celular con el chip del bot abrí WhatsApp y andá a:\n"
             "  ⋮ (o Configuración) > Dispositivos vinculados > Vincular un dispositivo >\n"
             "  'Vincular con el número de teléfono' e ingresá el código.\n"
-            f"  Tenés {TIEMPO_PARA_VINCULAR // 60} minutos.\n"
+            "  Tenés unos 2 minutos. No hagas clic dentro de esta ventana.\n"
         )
         log.warning(aviso)
-        self._en_segundo_plano(self._esperar_vinculacion())
 
-    def _mostrar_qr(self, qr: bytes) -> None:
+    def _mostrar_qr(self, qr: bytes, abrir: bool = False) -> None:
         import segno  # viene con neonize
 
         codigo_qr = segno.make_qr(qr)
@@ -203,34 +209,57 @@ class LichaBot:
             "Si en la consola no se ve bien, abrí %s (se renueva cada 20 segundos).",
             archivo,
         )
-        if sys.platform == "win32" and not self._codigo_pedido:
-            self._codigo_pedido = True
+        if sys.platform == "win32" and abrir:
             try:
                 os.startfile(archivo)  # type: ignore[attr-defined]  # abre la imagen la primera vez
             except OSError:
                 pass
 
     async def _esperar_vinculacion(self) -> None:
-        try:
-            await asyncio.wait_for(self._vinculado.wait(), timeout=TIEMPO_PARA_VINCULAR)
-        except TimeoutError:
+        """Vigila la vinculación: si se completa pero el bot no arranca a escuchar, lo reinicia."""
+        inicio = time.monotonic()
+        sesion_vista: float | None = None
+        while time.monotonic() - inicio < TIEMPO_PARA_VINCULAR:
+            try:
+                await asyncio.wait_for(self._vinculado.wait(), timeout=INTERVALO_VIGILANCIA)
+                return  # vinculado y escuchando
+            except TimeoutError:
+                pass
+            if sesion_guardada(self.config.archivo_sesion):
+                sesion_vista = sesion_vista or time.monotonic()
+                if time.monotonic() - sesion_vista >= ESPERA_TRAS_VINCULAR:
+                    break
+        if self._vinculado.is_set():
+            return
+        if sesion_guardada(self.config.archivo_sesion):
+            log.warning("El número quedó vinculado. Reinicio el bot para que empiece a escuchar mensajes…")
+            await self.detener(SALIDA_REINICIAR)
+        else:
             log.error("El código venció sin usarse. Cerrá y volvé a iniciar el bot para pedir otro.")
             await self.detener(SALIDA_VINCULAR)
 
     async def _al_vincular(self, _: NewAClient, ev: PairStatusEv) -> None:
         if ev.Status == PairStatusEv.SUCCESS:
             self._vinculado.set()
-            log.info("¡Número vinculado! (%s). La sesión quedó guardada; no hace falta volver a vincular.", ev.ID.User)
+            log.info(
+                "¡Número vinculado! (%s). La sesión quedó guardada; no hace falta volver a vincular. "
+                "WhatsApp reconecta una vez: esperá el mensaje de 'conectado'.",
+                ev.ID.User,
+            )
         else:
             log.error("Falló la vinculación: %s", ev.Error)
 
-    async def _al_conectar(self, _: NewAClient, __: ConnectedEv) -> None:
+    async def _al_conectar(self, cliente: NewAClient, __: ConnectedEv) -> None:
         self._vinculado.set()
-        comandos = len(self.registro.todos())
+        yo = getattr(getattr(getattr(cliente, "me", None), "JID", None), "User", "")
         log.info(
-            "✅ %s está conectado y escuchando (%d comandos). Probalo escribiéndole %smenu desde OTRO número.",
+            "✅ %s está conectado y escuchando (%d comandos)%s.",
             self.config.nombre,
-            comandos,
+            len(self.registro.todos()),
+            f" con el número +{yo}" if yo else "",
+        )
+        log.info(
+            "Probalo escribiéndole %smenu desde OTRO número: los mensajes que salen del número del bot se ignoran.",
             self.config.prefijo,
         )
 
@@ -277,15 +306,36 @@ class LichaBot:
         """Decide qué hacer con un mensaje: comando, oyentes o nada."""
         fuente = ev.Info.MessageSource
         cfg = self.config
-        if fuente.IsFromMe or ev.IsEdit or fuente.Chat.Server not in SERVIDORES_PERMITIDOS:
+        texto = texto_de(ev.Message)
+        pedido = parsear_comando(texto, cfg.prefijos)
+        log.debug(
+            "Mensaje %s de %s en %s (propio=%s): %r",
+            ev.Info.ID, jid_a_texto(fuente.Sender), jid_a_texto(fuente.Chat), fuente.IsFromMe, texto[:80],
+        )  # fmt: skip
+
+        if fuente.IsFromMe:
+            if pedido is not None:  # el error más común al probar: escribirle desde su propio número
+                log.info("Ignoro %r porque salió del número del bot. Probá desde otro número.", texto[:40])
             return
-        if (fuente.IsGroup and not cfg.responder_en_grupos) or (not fuente.IsGroup and not cfg.responder_en_privado):
+        if ev.IsEdit or fuente.Chat.Server not in SERVIDORES_PERMITIDOS:
+            return
+        if fuente.IsGroup and not cfg.responder_en_grupos:
+            if pedido is not None:
+                log.info("Ignoro %r: está desactivado responder en grupos (responder_en_grupos).", texto[:40])
+            return
+        if not fuente.IsGroup and not cfg.responder_en_privado:
+            if pedido is not None:
+                log.info("Ignoro %r: está desactivado responder por privado (responder_en_privado).", texto[:40])
             return
         if self._es_viejo(ev):
-            log.debug("Ignoro el mensaje viejo %s", ev.Info.ID)
+            if pedido is not None:
+                log.info(
+                    "Ignoro %r: es de hace más de %g minutos (el bot estaba apagado o la hora de la PC está mal).",
+                    texto[:40],
+                    cfg.ignorar_mensajes_de_mas_de_minutos,
+                )
             return
 
-        pedido = parsear_comando(texto_de(ev.Message), cfg.prefijos)
         if pedido is not None:
             prefijo, nombre, resto = pedido
             cmd = self.registro.buscar(nombre)

@@ -5,6 +5,9 @@ por uno falso que anota todo lo que el bot manda.
 """
 
 import asyncio
+import dataclasses
+import logging
+import sqlite3
 import time
 
 import pytest
@@ -23,7 +26,8 @@ from neonize.proto.waE2E.WAWebProtobufsE2E_pb2 import (
     VideoMessage,
 )
 
-from licha_bot.bot import SALIDA_ERROR, SALIDA_REINICIAR, LichaBot
+from licha_bot import bot as modulo_bot
+from licha_bot.bot import SALIDA_ERROR, SALIDA_REINICIAR, SALIDA_VINCULAR, LichaBot
 from licha_bot.comandos import REGISTRO, Registro, cargar_comandos
 from licha_bot.config import desde_dict
 from licha_bot.conversor import inspeccionar_webp
@@ -162,6 +166,76 @@ def test_reiniciar_devuelve_su_codigo_de_salida():
 
     assert asyncio.run(correr()) == SALIDA_REINICIAR
     assert cliente.detenido
+
+
+def sesion_vinculada(archivo):
+    with sqlite3.connect(archivo) as db:
+        db.execute("CREATE TABLE whatsmeow_device (jid TEXT)")
+        db.execute("INSERT INTO whatsmeow_device VALUES ('5491100000000@s.whatsapp.net')")
+
+
+@pytest.fixture
+def vigilancia_rapida(monkeypatch):
+    monkeypatch.setattr(modulo_bot, "INTERVALO_VIGILANCIA", 0.01)
+    monkeypatch.setattr(modulo_bot, "ESPERA_TRAS_VINCULAR", 0.05)
+    monkeypatch.setattr(modulo_bot, "TIEMPO_PARA_VINCULAR", 1)
+
+
+def bot_con_sesion(tmp_path, vinculada: bool) -> tuple[LichaBot, ClienteFalso]:
+    archivo = tmp_path / "sesion.sqlite3"
+    if vinculada:
+        sesion_vinculada(archivo)
+    cliente = ClienteFalso()
+    config = dataclasses.replace(desde_dict({}), archivo_sesion=archivo)
+    return LichaBot(config, cliente=cliente), cliente
+
+
+def test_si_se_vinculo_pero_no_arranco_se_reinicia_solo(tmp_path, vigilancia_rapida):
+    bot, cliente = bot_con_sesion(tmp_path, vinculada=True)
+    asyncio.run(bot._esperar_vinculacion())
+    assert cliente.detenido and bot.codigo_salida == SALIDA_REINICIAR
+
+
+def test_si_el_codigo_vence_pide_vincular_de_nuevo(tmp_path, vigilancia_rapida):
+    bot, cliente = bot_con_sesion(tmp_path, vinculada=False)
+    asyncio.run(bot._esperar_vinculacion())
+    assert cliente.detenido and bot.codigo_salida == SALIDA_VINCULAR
+
+
+def test_si_se_conecta_la_vigilancia_no_hace_nada(tmp_path, vigilancia_rapida):
+    bot, cliente = bot_con_sesion(tmp_path, vinculada=True)
+
+    async def correr():
+        vigilancia = asyncio.create_task(bot._esperar_vinculacion())
+        bot._vinculado.set()  # llegó el evento de conectado
+        await vigilancia
+
+    asyncio.run(correr())
+    assert not cliente.detenido
+
+
+def test_avisa_si_le_escriben_desde_el_numero_del_bot(caplog):
+    bot, cliente = crear_bot()
+    with caplog.at_level(logging.INFO, logger="licha.bot"):
+        procesar(bot, evento(texto("!menu"), propio=True))
+    assert cliente.respuestas == []
+    assert "salió del número del bot" in caplog.text
+
+
+def test_oculta_el_aviso_normal_de_reconexion():
+    import main
+
+    filtro = main.OcultarAvisosNormales()
+    normal = logging.LogRecord("whatsmeow.Client.Socket", logging.WARNING, "", 0,
+                               "Error sending close to websocket: failed to read frame header: EOF", None, None)
+    otro = logging.LogRecord("whatsmeow.Client", logging.WARNING, "", 0, "Otro problema", None, None)
+    nivel = logging.getLogger().level
+    logging.getLogger().setLevel(logging.INFO)
+    try:
+        assert not filtro.filter(normal)
+        assert filtro.filter(otro)
+    finally:
+        logging.getLogger().setLevel(nivel)
 
 
 # --------------------------------------------------------------------------- #
