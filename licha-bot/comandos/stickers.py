@@ -11,6 +11,26 @@ from licha_bot.mensajes import Media, media_de
 PALABRAS_RECORTAR = {"recortar", "recortado", "r", "cuadrado", "crop"}
 LARGO_MAXIMO_NOMBRE = 60
 
+STICKER_SIN_MEDIA = (
+    "Pasame una foto, video o GIF y te lo hago sticker.",
+    "¿Qué convertimos? Respondé a la foto, video o GIF con {p}sticker.",
+    "Materia prima, amigo. Mandame una foto, video o GIF.",
+    "El sticker lo pongo yo. La foto, el video o el GIF los ponés vos.",
+)
+STICKER_YA_ES = (
+    "Ya es sticker. Impecable el trabajo que me dejaste.",
+    "Lo miré bien. Te me adelantaste, ya es sticker.",
+)
+IMAGEN_SIN_STICKER = (
+    "Respondé a un sticker con {p}imagen y te lo paso a foto.",
+    "¿Cuál sticker? Respondelo con {p}imagen.",
+    "Te falta elegir la víctima. Citá el sticker con {p}imagen.",
+)
+IMAGEN_LISTA = (
+    "Ahí tenés la foto.",
+    "Listo, volvió a imagen.",
+)
+
 
 def opciones_del_pedido(ctx: Contexto) -> OpcionesSticker:
     """Lee los extras del comando: '!s recortar Mi pack | Mi nombre'."""
@@ -48,7 +68,7 @@ async def hacer_sticker(ctx: Contexto, media: Media, opciones: OpcionesSticker) 
 @comando(
     "sticker", "s", "stiker", "fig",
     categoria="Stickers",
-    descripcion="Convierte una foto, video o GIF en sticker",
+    descripcion="Pasá una foto, video o GIF a sticker.",
     uso=(
         "Mandá una foto, video o GIF con el texto {p}sticker, o respondé a uno (o a un sticker) con {p}sticker.\n"
         "• {p}s recortar → lo recorta cuadrado, sin bordes\n"
@@ -59,23 +79,31 @@ async def hacer_sticker(ctx: Contexto, media: Media, opciones: OpcionesSticker) 
 async def sticker(ctx: Contexto) -> None:
     media = ctx.media()
     if media is None:
-        raise ErrorUsuario(ctx.uso())
+        texto = ctx.frase("sticker.falta", STICKER_SIN_MEDIA)
+        if f"{ctx.prefijo}sticker" not in texto:  # que siempre quede claro cómo se usa
+            texto += f"\nMandala con {ctx.prefijo}sticker de pie de foto, o respondé a una con {ctx.prefijo}sticker."
+        raise ErrorUsuario(texto)
+    if media.tipo == "sticker" and not ctx.args:
+        # Sin "recortar" ni "Mi pack | Mi nombre" no hay nada que cambiarle.
+        ya_es = ctx.frase("sticker.ya_es", STICKER_YA_ES)
+        raise ErrorUsuario(f"{ya_es} Si querés ponerle tu nombre: {ctx.prefijo}s Mi pack | Mi nombre")
     await hacer_sticker(ctx, media, opciones_del_pedido(ctx))
 
 
 @comando(
     "imagen", "toimg", "img", "foto",
     categoria="Stickers",
-    descripcion="Convierte un sticker en foto",
+    descripcion="Convertí un sticker en foto.",
     uso="Respondé a un sticker con {p}imagen.",
 )  # fmt: skip
 async def imagen(ctx: Contexto) -> None:
     media = ctx.media()
     if media is None or media.tipo != "sticker":
-        raise ErrorUsuario(ctx.uso())
+        raise ErrorUsuario(ctx.frase("imagen.falta", IMAGEN_SIN_STICKER))
     datos = await ctx.descargar(media)
     jpeg, animado = await ctx.en_segundo_plano(sticker_a_imagen, datos)
-    await ctx.enviar_imagen(jpeg, "Es un sticker animado: te mando el primer cuadro." if animado else "")
+    pie = "Es un sticker animado: te mando el primer cuadro." if animado else ctx.frase("imagen.lista", IMAGEN_LISTA)
+    await ctx.enviar_imagen(jpeg, pie)
 
 
 @escuchar

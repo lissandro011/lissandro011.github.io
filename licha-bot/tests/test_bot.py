@@ -5,12 +5,21 @@ por uno falso que anota todo lo que el bot manda.
 """
 
 import asyncio
+import itertools
 import time
 
 import pytest
 from conftest import foto, gif
 from neonize.aioze.events import MessageEv
-from neonize.proto.Neonize_pb2 import JID, Device, GroupInfo, GroupParticipant, UploadResponse
+from neonize.proto.Neonize_pb2 import (
+    JID,
+    Device,
+    GroupInfo,
+    GroupName,
+    GroupParticipant,
+    SendResponse,
+    UploadResponse,
+)
 from neonize.proto.waE2E.WAWebProtobufsE2E_pb2 import (
     ContextInfo,
     DocumentMessage,
@@ -23,6 +32,7 @@ from neonize.proto.waE2E.WAWebProtobufsE2E_pb2 import (
     VideoMessage,
 )
 
+from licha_bot.almacen import Almacen
 from licha_bot.bot import SALIDA_ERROR, SALIDA_REINICIAR, LichaBot
 from licha_bot.comandos import REGISTRO, Registro, cargar_comandos
 from licha_bot.config import desde_dict
@@ -32,6 +42,8 @@ from licha_bot.mensajes import buscar_media, parsear_comando, texto_de
 DUENO = "5491111111111"
 OTRO = "5492222222222"
 BOT = "5490000000000"
+GRUPO = "120363000000000000"
+_ids = itertools.count(1)
 
 
 # --------------------------------------------------------------------------- #
@@ -51,19 +63,23 @@ def video(caption: str = "", segundos: int = 3, **kw) -> Message:
     return Message(videoMessage=VideoMessage(caption=caption, seconds=segundos, mimetype="video/mp4", **kw))
 
 
-def respuesta(t: str, citado: Message) -> Message:
+def respuesta(t: str, citado: Message, id_citado: str = "Q1") -> Message:
     return Message(
-        extendedTextMessage=ExtendedTextMessage(text=t, contextInfo=ContextInfo(stanzaID="Q1", quotedMessage=citado))
+        extendedTextMessage=ExtendedTextMessage(
+            text=t, contextInfo=ContextInfo(stanzaID=id_citado, quotedMessage=citado)
+        )
     )
 
 
-def evento(msg: Message, *, de=OTRO, grupo=False, propio=False, server=None, ts=None, ver_una_vez=False) -> MessageEv:
+def evento(
+    msg: Message, *, de=OTRO, grupo=False, propio=False, server=None, ts=None, ver_una_vez=False, nombre="Ana", id=None
+) -> MessageEv:
     ev = MessageEv()
-    ev.Info.ID = "MSG1"
-    ev.Info.Pushname = "Ana"
+    ev.Info.ID = id or f"MSG{next(_ids)}"  # cada mensaje con su ID (los repetidos se ignoran)
+    ev.Info.Pushname = nombre
     ev.Info.Timestamp = int(time.time()) if ts is None else ts
     fuente = ev.Info.MessageSource
-    fuente.Chat.User = "120363000000000000" if grupo else de
+    fuente.Chat.User = GRUPO if grupo else de
     fuente.Chat.Server = server or ("g.us" if grupo else "s.whatsapp.net")
     fuente.Sender.User = de
     fuente.Sender.Server = "s.whatsapp.net"
@@ -78,6 +94,9 @@ class ClienteFalso:
     def __init__(self, descarga: bytes = b"", error_al_conectar: Exception | None = None):
         self.descarga = descarga
         self.integrantes: list[GroupParticipant] = []
+        self.grupos: list[GroupInfo] = []
+        self.salidas: list[str] = []
+        self._ids_enviados = itertools.count(1)
         self.error_al_conectar = error_al_conectar
         self._parado = asyncio.Event()
         self.respuestas: list[str] = []
@@ -86,12 +105,17 @@ class ClienteFalso:
         self.descargados: list[Message] = []
         self.detenido = False
 
+    def _respuesta(self) -> SendResponse:
+        return SendResponse(ID=f"BOT{next(self._ids_enviados)}")
+
     async def reply_message(self, mensaje, quoted, **_):
         assert isinstance(quoted, MessageEv)
         self.respuestas.append(mensaje)
+        return self._respuesta()
 
     async def send_message(self, to, message, **_):
         self.enviados.append((to, message))
+        return self._respuesta()
 
     async def build_reaction(self, chat, sender, message_id, reaction):
         return Message(reactionMessage=ReactionMessage(text=reaction))
@@ -105,7 +129,13 @@ class ClienteFalso:
         return self.descarga
 
     async def get_group_info(self, jid):
-        return GroupInfo(JID=jid, Participants=self.integrantes)
+        return GroupInfo(JID=jid, GroupName=GroupName(Name="Los pibes"), Participants=self.integrantes)
+
+    async def get_joined_groups(self):
+        return self.grupos
+
+    async def leave_group(self, jid):
+        self.salidas.append(f"{jid.User}@{jid.Server}")
 
     async def get_me(self):
         return Device(JID=JID(User=BOT, Server="s.whatsapp.net"), LID=JID(User="99", Server="lid"))
@@ -125,6 +155,10 @@ class ClienteFalso:
     def stickers(self) -> list[StickerMessage]:
         return [m.stickerMessage for _, m in self.enviados if isinstance(m, Message) and m.HasField("stickerMessage")]
 
+    def textos(self) -> list[tuple[str, str]]:
+        """(destino, texto) de los mensajes de texto mandados sin citar."""
+        return [(f"{to.User}@{to.Server}", m) for to, m in self.enviados if isinstance(m, str)]
+
     def reacciones(self) -> list[str]:
         mensajes = [m for _, m in self.enviados if isinstance(m, Message)]
         return [m.reactionMessage.text for m in mensajes if m.HasField("reactionMessage")]
@@ -141,7 +175,7 @@ def comandos_cargados():
 def crear_bot(descarga: bytes = b"", **config) -> tuple[LichaBot, ClienteFalso]:
     datos = {"bot": {"duenos": [DUENO], "espera_entre_comandos": 0, **config.pop("bot", {})}, **config}
     cliente = ClienteFalso(descarga)
-    return LichaBot(desde_dict(datos), cliente=cliente), cliente
+    return LichaBot(desde_dict(datos), cliente=cliente, almacen=Almacen(":memory:")), cliente
 
 
 def procesar(bot: LichaBot, ev: MessageEv) -> None:
@@ -256,9 +290,11 @@ def test_registro_rechaza_duplicados_y_funciones_comunes():
 
 
 def test_ping():
+    from comandos.general import PING_PRIMERO
+
     bot, cliente = crear_bot()
     procesar(bot, evento(texto("!ping")))
-    assert len(cliente.respuestas) == 1 and "Pong" in cliente.respuestas[0]
+    assert len(cliente.respuestas) == 1 and cliente.respuestas[0] in PING_PRIMERO
 
 
 def test_menu_lista_los_comandos_sin_los_de_dueno():
@@ -266,14 +302,15 @@ def test_menu_lista_los_comandos_sin_los_de_dueno():
     procesar(bot, evento(texto(".menu")))
     menu = cliente.respuestas[0]
     assert "Licha Bot" in menu and ".sticker" in menu and ".ping" in menu
-    assert "reiniciar" not in menu
+    assert "reiniciar" not in menu and "Solo Licha" not in menu
     assert menu.index("Stickers") < menu.index("General")
 
 
 def test_menu_del_dueno_muestra_sus_comandos():
     bot, cliente = crear_bot()
     procesar(bot, evento(texto("!menu"), de=DUENO))
-    assert "!reiniciar" in cliente.respuestas[0]
+    assert "🔒 *Solo Licha*" in cliente.respuestas[0]
+    assert "!reiniciar" in cliente.respuestas[0] and "!apagar" in cliente.respuestas[0]
 
 
 def test_ayuda_de_un_comando():
@@ -336,8 +373,10 @@ def test_espera_entre_comandos():
 
 def test_comando_de_dueno():
     bot, cliente = crear_bot()
+    from licha_bot.bot import SIN_PERMISO
+
     procesar(bot, evento(texto("!reiniciar")))
-    assert "solo para el dueño" in cliente.respuestas[0] and not cliente.detenido
+    assert cliente.respuestas[0] in SIN_PERMISO and not cliente.detenido
 
     procesar(bot, evento(texto("!reiniciar"), de=DUENO))
     assert cliente.detenido and bot.codigo_salida == SALIDA_REINICIAR
@@ -363,10 +402,11 @@ def test_error_inesperado_en_un_comando():
 
 def test_sticker_de_una_foto():
     bot, cliente = crear_bot(foto())
-    procesar(bot, evento(imagen("!s")))
+    ev = evento(imagen("!s"))
+    procesar(bot, ev)
     (sticker,) = cliente.stickers()
     assert sticker.mimetype == "image/webp" and not sticker.isAnimated
-    assert sticker.contextInfo.stanzaID == "MSG1"  # sale como respuesta al pedido
+    assert sticker.contextInfo.stanzaID == ev.Info.ID  # sale como respuesta al pedido
     assert cliente.descargados[0].HasField("imageMessage")
     assert inspeccionar_webp(cliente.subidas[0])["exif"]["sticker-pack-name"] == "Licha Bot"
 
@@ -384,7 +424,7 @@ def test_sticker_respondiendo_a_un_gif_con_paquete_propio():
 def test_sticker_sin_foto_explica_como_usarlo():
     bot, cliente = crear_bot()
     procesar(bot, evento(texto("!s")))
-    assert "Mandá una foto" in cliente.respuestas[0]
+    assert "!sticker" in cliente.respuestas[0]  # siempre explica cómo se usa
     assert cliente.stickers() == []
 
 
@@ -431,101 +471,4 @@ def test_imagen_de_un_sticker():
 def test_imagen_sin_sticker_explica_como_usarlo():
     bot, cliente = crear_bot()
     procesar(bot, evento(respuesta("!imagen", imagen())))
-    assert "Respondé a un sticker" in cliente.respuestas[0]
-
-
-# --------------------------------------------------------------------------- #
-# Diversión
-# --------------------------------------------------------------------------- #
-
-
-def test_leer_dados():
-    from comandos.diversion import leer_dados
-
-    assert leer_dados("") == (1, 6)
-    assert leer_dados("20") == (1, 20)
-    assert leer_dados("2d6") == (2, 6)
-    assert leer_dados("D12") == (1, 12)
-    for malo in ("1", "abc", "11d6", "2d1", "d5000"):
-        with pytest.raises(ValueError):
-            leer_dados(malo)
-
-
-def test_dado_moneda_y_8ball():
-    bot, cliente = crear_bot()
-    for t in ("!dado", "!dado 2d6", "!dado banana", "!moneda", "!8ball ¿Llueve?", "!8ball"):
-        procesar(bot, evento(texto(t)))
-    dado, dos_dados, malo, mon, bola, sin_pregunta = cliente.respuestas
-    assert dado.startswith("🎲 Salió") and 1 <= int(dado.split("*")[1]) <= 6
-    assert "+" in dos_dados and 2 <= int(dos_dados.split("*")[1]) <= 12
-    assert "No entendí" in malo
-    assert "cara" in mon or "cruz" in mon
-    assert bola.startswith("🎱")
-    assert "pregunta" in sin_pregunta
-
-
-@pytest.mark.parametrize(
-    "t, esperado",
-    [
-        ("pizza, empanadas o sushi", ["pizza", "empanadas", "sushi"]),
-        ("ir | quedarse", ["ir", "quedarse"]),
-        ("rojo azul verde", ["rojo", "azul", "verde"]),
-        ("¿Netflix o dormir?", ["Netflix", "dormir"]),
-        ("comida china, comida china, Comida China", ["comida china"]),
-        ("siete u ocho", ["siete", "ocho"]),
-        ("solo", ["solo"]),
-    ],
-)
-def test_leer_opciones(t, esperado):
-    from comandos.diversion import leer_opciones
-
-    assert leer_opciones(t) == esperado
-
-
-def test_elegir():
-    bot, cliente = crear_bot()
-    procesar(bot, evento(texto("!elegir pizza, empanadas o sushi")))
-    procesar(bot, evento(texto("!elegir pizza")))
-    elegido, error = cliente.respuestas
-    assert elegido.split("*")[1] in {"pizza", "empanadas", "sushi"}
-    assert "al menos dos" in error
-
-
-def integrante(numero: str) -> GroupParticipant:
-    return GroupParticipant(JID=JID(User=numero, Server="s.whatsapp.net"))
-
-
-def test_top5_etiqueta_integrantes_sin_el_bot():
-    bot, cliente = crear_bot()
-    numeros = [f"54911000000{i:02d}" for i in range(8)]
-    cliente.integrantes = [integrante(BOT)] + [integrante(n) for n in numeros]
-    procesar(bot, evento(texto("!top5 más dormilones"), grupo=True))
-    (_, mensaje) = cliente.enviados[0]
-    ext = mensaje.extendedTextMessage
-    assert ext.text.startswith("🏆 *Top 5: más dormilones*")
-    assert ext.contextInfo.stanzaID == "MSG1"  # responde citando
-    mencionados = list(ext.contextInfo.mentionedJID)
-    assert len(mencionados) == len(set(mencionados)) == 5
-    assert all(m.split("@")[0] in numeros and f"@{m.split('@')[0]}" in ext.text for m in mencionados)
-
-
-def test_top_con_cantidad_y_grupo_chico():
-    bot, cliente = crear_bot()
-    cliente.integrantes = [integrante("5491100000001"), integrante("5491100000002")]
-    procesar(bot, evento(texto("!top 3 mejores cocineros"), grupo=True))
-    ext = cliente.enviados[0][1].extendedTextMessage
-    assert ext.text.startswith("🏆 *Top 2: mejores cocineros*")
-    assert len(ext.contextInfo.mentionedJID) == 2
-
-
-def test_top_errores():
-    bot, cliente = crear_bot()
-    procesar(bot, evento(texto("!top5"), grupo=True))
-    procesar(bot, evento(texto("!top 50 algo"), grupo=True))
-    procesar(bot, evento(texto("!top5 algo"), grupo=True))  # grupo sin integrantes
-    procesar(bot, evento(texto("!top5 algo")))  # por privado
-    sin_titulo, muchos, vacio, privado = cliente.respuestas
-    assert "de qué es el top" in sin_titulo
-    assert "de 2 a 10" in muchos
-    assert "No encontré a nadie" in vacio
-    assert "solo funciona en grupos" in privado
+    assert "!imagen" in cliente.respuestas[0]

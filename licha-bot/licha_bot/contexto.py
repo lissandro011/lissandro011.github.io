@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from neonize.aioze.events import MessageEv
@@ -21,7 +21,8 @@ from neonize.utils.jid import Jid2String, JIDToNonAD, jid_is_lid
 
 from . import conversor
 from .errores import ErrorUsuario
-from .mensajes import Media, buscar_media, jid_a_texto, numero_de, texto_de
+from .frases import completar
+from .mensajes import Media, buscar_media, contexto_de, jid_a_texto, numero_de, texto_de
 
 if TYPE_CHECKING:
     from .bot import LichaBot
@@ -74,6 +75,9 @@ class Contexto:
         ctx.numero       su número de teléfono, si WhatsApp lo informa
         ctx.es_grupo     True si se escribió en un grupo
         ctx.es_dueno     True si quien escribió está en la lista de dueños
+        ctx.persona      identificador de quien escribió (para guardar votos, rachas, etc.)
+        ctx.anterior     el comando que esa persona usó justo antes en este chat (o None)
+        ctx.citado       ID del mensaje al que respondió (o "")
 
     Acciones (todas con await):
         ctx.responder("texto")              responde citando el mensaje
@@ -81,6 +85,10 @@ class Contexto:
         ctx.reaccionar("👍")                reacciona al mensaje ("" la quita)
         ctx.responder_mencionando(t, jids)  responde etiquetando a esas personas
         ctx.integrantes()                   integrantes del grupo (sin el bot)
+        ctx.es_admin()                      True si quien escribió es admin del grupo
+
+    Frases:
+        ctx.frase("banco", FRASES, dato=…)  saca una frase de la bolsa del chat y completa {dato} y {p}
         ctx.enviar_sticker(webp, animado)   manda un sticker
         ctx.enviar_imagen(jpeg, "pie")      manda una foto
         ctx.descargar(media)                baja la foto/video que mandaron
@@ -116,6 +124,11 @@ class Contexto:
         self.nombre = evento.Info.Pushname or "che"
         self.numero = numero_de(fuente.Sender) or numero_de(fuente.SenderAlt)
         self.es_dueno = self.numero is not None and self.numero in bot.config.duenos
+        self.persona = jid_a_texto(fuente.Sender)
+        self.clave_chat = jid_a_texto(fuente.Chat)
+        self.anterior: str | None = None
+        contexto = contexto_de(evento.Message)
+        self.citado = contexto.stanzaID if contexto is not None else ""
 
     # -- textos --------------------------------------------------------------- #
 
@@ -130,15 +143,25 @@ class Contexto:
         texto = cmd.uso or f"{{p}}{cmd.nombre}"
         return texto.replace("{p}", self.prefijo)
 
+    def frase(self, banco: str, opciones: Sequence[str], clave: str | None = None, **datos: Any) -> str:
+        """Saca la próxima frase del banco (una bolsa mezclada por chat) y completa {campos} y {p}.
+
+        `clave` cambia de quién es la bolsa (por defecto, del chat).
+        """
+        plantilla = self.bot.frases.sacar(clave or self.clave_chat, banco, opciones)
+        return completar(plantilla, p=self.prefijo, **datos)
+
     # -- responder -------------------------------------------------------------- #
 
-    async def responder(self, texto: str) -> None:
-        """Responde citando el mensaje."""
-        await self.cliente.reply_message(texto, copiar_evento(self.evento))
+    async def responder(self, texto: str) -> str:
+        """Responde citando el mensaje. Devuelve el ID del mensaje enviado ("" si no se sabe)."""
+        respuesta = await self.cliente.reply_message(texto, copiar_evento(self.evento))
+        return getattr(respuesta, "ID", "") or ""
 
-    async def enviar(self, texto: str) -> None:
-        """Manda un mensaje al chat sin citar."""
-        await self.cliente.send_message(self.chat, texto)
+    async def enviar(self, texto: str) -> str:
+        """Manda un mensaje al chat sin citar. Devuelve el ID del mensaje enviado ("" si no se sabe)."""
+        respuesta = await self.cliente.send_message(self.chat, texto)
+        return getattr(respuesta, "ID", "") or ""
 
     async def reaccionar(self, emoji: str) -> None:
         """Reacciona al mensaje con un emoji ("" quita la reacción). Si falla, no pasa nada."""
@@ -153,24 +176,43 @@ class Contexto:
         """Texto que etiqueta a alguien ("@549..."). Va junto con responder_mencionando."""
         return f"@{jid.User}"
 
-    async def responder_mencionando(self, texto: str, jids: list[JID]) -> None:
+    async def responder_mencionando(self, texto: str, jids: list[JID]) -> str:
         """Responde citando el mensaje y etiquetando a `jids` (usá ctx.mencion(jid) en el texto)."""
         contexto = contexto_de_respuesta(self.evento)
         contexto.mentionedJID.extend(Jid2String(JIDToNonAD(j)) for j in jids)
         mensaje = Message(extendedTextMessage=ExtendedTextMessage(text=texto, contextInfo=contexto))
-        await self.cliente.send_message(self.chat, mensaje)
+        respuesta = await self.cliente.send_message(self.chat, mensaje)
+        return getattr(respuesta, "ID", "") or ""
 
-    async def integrantes(self) -> list[JID]:
-        """Integrantes del grupo, sin contar al bot. Fuera de un grupo devuelve una lista vacía."""
-        if not self.es_grupo:
-            return []
+    async def _info_grupo(self):
         try:
-            info = await self.cliente.get_group_info(self.chat)
+            return await self.cliente.get_group_info(self.chat)
         except Exception as exc:
             raise ErrorUsuario(
                 "No pude ver quiénes están en el grupo 😕 Probá de nuevo en un rato.",
                 f"get_group_info falló: {exc!r}",
             ) from exc
+
+    async def es_admin(self) -> bool:
+        """True si quien escribió es admin del grupo (False fuera de grupos o si WhatsApp no responde)."""
+        if not self.es_grupo:
+            return False
+        try:
+            info = await self.cliente.get_group_info(self.chat)
+        except Exception:
+            log.debug("No pude leer los admins del grupo", exc_info=True)
+            return False
+        mios = {self.remitente.User, self.evento.Info.MessageSource.SenderAlt.User} - {""}
+        return any(
+            (p.IsAdmin or p.IsSuperAdmin) and {p.JID.User, p.LID.User, p.PhoneNumber.User} & mios
+            for p in info.Participants
+        )
+
+    async def integrantes(self) -> list[JID]:
+        """Integrantes del grupo, sin contar al bot. Fuera de un grupo devuelve una lista vacía."""
+        if not self.es_grupo:
+            return []
+        info = await self._info_grupo()
         propios: set[str] = set()
         try:
             yo = await self.cliente.get_me()
