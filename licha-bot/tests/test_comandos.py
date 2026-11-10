@@ -631,6 +631,15 @@ def test_menu_en_grupo_tiene_el_formato_pedido():
     procesar(bot, evento(texto("!menu"), grupo=True))
     menu = cliente.respuestas[0]
     assert menu.startswith("🤖 *Licha Bot*\n\nMandame una foto, video o GIF y te lo hago sticker.\n")
+    lineas = menu.splitlines()
+    # Stickers va primero, debajo de "Mandame una foto..." y el saludo.
+    assert lineas[5:8] == [
+        "🖼️ *Stickers*",
+        "• !sticker — Pasá una foto, video o GIF a sticker.",
+        "• !imagen — Convertí un sticker en foto.",
+    ]
+    assert lineas.index("🖼️ *Stickers*") < lineas.index("🎲 *Para jugar*") < lineas.index("🍕 *Para grupos*")
+    assert "Para el grupo" not in menu
     for linea in (
         "🎲 *Para jugar*",
         "• !dado — Tirá uno o varios dados.",

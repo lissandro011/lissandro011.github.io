@@ -6,8 +6,7 @@ Bot de WhatsApp que hace stickers, pensado para correr en una PC con Windows y p
 - **Video o GIF → sticker animado**: igual, con videos o GIFs (se usan los primeros 10 segundos).
 - **Sticker → sticker con tu nombre**: respondé a cualquier sticker con `!s Mi pack | Mi nombre`.
 - **Sticker → foto**: respondé a un sticker con `!imagen`.
-- **Por privado es automático**: cualquier foto, video o GIF que le manden vuelve como sticker.
-- **Para jugar y para el grupo**: dado, moneda, bola 8, elegir, ranking, excusas, votar reglas (`!decreto`) y armar planes (`!confirmo`), con respuestas de amigo argentino que se dan cuenta de lo que acaba de pasar.
+- **Para jugar y para grupos**: dado, moneda, bola 8, elegir, ranking, excusas, votar reglas (`!decreto`) y armar planes (`!confirmo`), con respuestas de amigo argentino que se dan cuenta de lo que acaba de pasar.
 - **Solo el dueño lo mete en grupos**: si lo agrega otra persona, le pide permiso al dueño y, si no lo autoriza, se va.
 - **Comandos nuevos**: se agregan con un archivo `.py` en la carpeta `comandos` y aparecen solos en `!menu`.
 
@@ -95,7 +94,7 @@ duenos = ["5491198765432"]    # TU número personal
 Desde **otro número** (el bot no contesta sus propios mensajes):
 
 1. Escribile `!menu` por privado: te contesta la lista de comandos.
-2. Mandale una foto: te la devuelve como sticker.
+2. Mandale una foto con el texto `!s`: te la devuelve como sticker.
 3. Agregalo a un grupo **desde tu número de dueño** y mandá una foto con el texto `!s`.
 
 ### Paso 8: dejarlo prendido 24/7
@@ -123,7 +122,7 @@ Los comandos funcionan con `!` o con `.` adelante (`!s` y `.s` son lo mismo). Se
 | `!elegir pizza, empanadas o sushi` | Elige una opción al azar. Separá con comas, `\|` o la palabra "o". |
 | `!top5 más dormilones` | (Solo grupos) Ranking en broma: etiqueta a 5 integrantes al azar. `!top 3 ...` cambia la cantidad (de 2 a 10). |
 
-**Para el grupo**
+**Para grupos**
 
 | Comando | Qué hace |
 |---|---|
@@ -154,7 +153,7 @@ Hay una lista y una votación abiertas por grupo. Las cierra quien las abrió, u
 | `!reiniciar` · `!apagar` | (Solo dueños) Reinicia o apaga el bot. |
 | `!autorizar` · `!rechazar` · `!grupos` | (Solo dueños) Deciden en qué grupos se queda el bot (ver abajo). |
 
-Por privado, cualquier foto, video o GIF se convierte en sticker sin escribir nada (se desactiva con `automatico_en_privado = false`). Las fotos y videos de "ver una vez" nunca se usan.
+Los stickers siempre se piden con `!sticker` (o `!s`), también por privado. Si querés que por privado cualquier foto vuelva como sticker sin escribir nada, poné `automatico_en_privado = true` en `config.toml`. Las fotos y videos de "ver una vez" nunca se usan.
 
 ### Grupos: solo el dueño agrega al bot
 

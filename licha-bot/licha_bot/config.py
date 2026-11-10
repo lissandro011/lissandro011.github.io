@@ -30,7 +30,7 @@ class ConfigStickers:
     paquete: str = "Licha Bot"
     autor: str = "Licha Bot"
     marca_de_agua: str = "Licha Bot"
-    automatico_en_privado: bool = True
+    automatico_en_privado: bool = False
     max_segundos_video: float = 10.0
     max_mb_descarga: int = 25
 
@@ -182,7 +182,7 @@ def desde_dict(datos: dict[str, Any]) -> Config:
             paquete=stk.texto("paquete", "Licha Bot"),
             autor=stk.texto("autor", "Licha Bot"),
             marca_de_agua=stk.texto("marca_de_agua", "Licha Bot"),
-            automatico_en_privado=stk.booleano("automatico_en_privado", True),
+            automatico_en_privado=stk.booleano("automatico_en_privado", False),
             max_segundos_video=stk.numero("max_segundos_video", 10, minimo=1),
             max_mb_descarga=int(stk.numero("max_mb_descarga", 25, minimo=1, entero=True)),
         ),

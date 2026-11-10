@@ -25,6 +25,10 @@ SALUDOS_MENU = (
 # (comando, lo que va después del nombre, descripción). Un comando que no esté
 # cargado no aparece; los comandos nuevos que no están acá van a "Otros".
 SECCIONES_MENU: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
+    ("🖼️ *Stickers*", (
+        ("sticker", "", "Pasá una foto, video o GIF a sticker."),
+        ("imagen", "", "Convertí un sticker en foto."),
+    )),
     ("🎲 *Para jugar*", (
         ("dado", "", "Tirá uno o varios dados."),
         ("moneda", "", "Cara o cruz. Después bancate lo que salga."),
@@ -32,14 +36,10 @@ SECCIONES_MENU: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
         ("elegir", "", "Pasame las opciones que ya sé que no se ponen de acuerdo."),
         ("top5", "", "Armo el ranking del grupo. Los reclamos van al que lo pidió."),
     )),
-    ("🍕 *Para el grupo*", (
+    ("🍕 *Para grupos*", (
         ("confirmo", "armar <plan>", "Abrí la lista. Cada uno pone voy, capaz o me bajo."),
         ("decreto", "<regla>", "Proponé una regla y que el grupo la vote."),
         ("excusa", "", "Te doy una excusa para bajarte del plan. Mandarla te toca a vos."),
-    )),
-    ("🖼️ *Stickers*", (
-        ("sticker", "", "Pasá una foto, video o GIF a sticker."),
-        ("imagen", "", "Convertí un sticker en foto."),
     )),
     ("⚙️ *General*", (
         ("menu", "", "Volvé a ver los comandos."),
@@ -239,11 +239,14 @@ _ultimo_saludo: dict[str, float] = {}
 
 @escuchar
 async def saludo(ctx: Contexto) -> bool:
-    """Por privado, a quien escribe algo que no es un comando le explica cómo usar el bot."""
-    if ctx.es_grupo or not ctx.config.saludar_por_privado or not ctx.texto.strip():
+    """Por privado, a quien escribe algo que no es un comando (o manda una foto sin !s) le explica cómo usar el bot."""
+    if ctx.es_grupo or not ctx.config.saludar_por_privado:
         return False
-    if media_de(ctx.mensaje) is not None:
+    tiene_media = media_de(ctx.mensaje) is not None
+    if tiene_media and ctx.config.stickers.automatico_en_privado:
         return False  # las fotos y videos los atiende el sticker automático
+    if not tiene_media and not ctx.texto.strip():
+        return False
     quien = ctx.numero or ctx.remitente.User
     ahora = time.monotonic()
     if ahora - _ultimo_saludo.get(quien, -SEGUNDOS_ENTRE_SALUDOS) < SEGUNDOS_ENTRE_SALUDOS:

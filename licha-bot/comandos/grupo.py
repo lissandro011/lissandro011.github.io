@@ -97,7 +97,7 @@ def resultado_decreto(ctx: Contexto, decreto: Decreto, si: int, no: int) -> str:
 
 @comando(
     "decreto", "decretos", "ley",
-    categoria="Para el grupo",
+    categoria="Para grupos",
     descripcion="Proponé una regla y que el grupo la vote.",
     uso=(
         "{p}decreto El que llega tarde paga el hielo → proponé una regla\n"
@@ -282,7 +282,7 @@ async def anotar(ctx: Contexto, plan: Plan, estado: str) -> None:
 
 @comando(
     "confirmo", "plan", "lista",
-    categoria="Para el grupo",
+    categoria="Para grupos",
     descripcion="Abrí la lista. Cada uno pone voy, capaz o me bajo.",
     uso=(
         "{p}confirmo armar previa del sábado → abrí la lista\n"

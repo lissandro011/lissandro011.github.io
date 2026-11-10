@@ -56,9 +56,9 @@ autor = "Licha Bot"
 # Para no dibujar nada, dejalo vacío: marca_de_agua = ""
 marca_de_agua = "Licha Bot"
 
-# Por privado, cualquier foto, video o GIF que le manden vuelve como sticker
-# (sin escribir !sticker). En los grupos siempre hace falta el comando.
-automatico_en_privado = true
+# Si es true, por privado cualquier foto, video o GIF que le manden vuelve como
+# sticker sin escribir !sticker. Con false (lo normal) siempre hace falta el comando.
+automatico_en_privado = false
 
 # Los videos más largos se cortan a esta cantidad de segundos.
 max_segundos_video = 10
