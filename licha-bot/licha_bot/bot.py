@@ -24,6 +24,7 @@ from neonize.aioze.events import (
     PairStatusEv,
     TemporaryBanEv,
 )
+from neonize.proto.Neonize_pb2 import JID
 from neonize.proto.waCompanionReg.WAWebProtobufsCompanionReg_pb2 import DeviceProps
 from neonize.utils.enum import ClientName
 
@@ -333,6 +334,9 @@ class LichaBot:
         if self._repetido(ev):
             log.debug("Ignoro el mensaje repetido %s", ev.Info.ID)
             return
+        if self._es_de_un_dueno(fuente):
+            # Si quedó algún grupo esperando permiso del que no le pude avisar, se lo cuento ahora.
+            await self._recordar_pendientes(fuente)
         if fuente.IsGroup and not await self._grupo_permitido(ev):
             return
 
@@ -367,13 +371,28 @@ class LichaBot:
             self._vistos.popitem(last=False)
         return False
 
+    def _es_de_un_dueno(self, fuente) -> bool:
+        """True si el mensaje lo escribió un dueño del bot ([bot] duenos en config.toml)."""
+        return (numero_de(fuente.Sender) or numero_de(fuente.SenderAlt)) in self.config.duenos
+
+    async def _recordar_pendientes(self, fuente) -> None:
+        """Le avisa al dueño de los grupos que esperan permiso y de los que no se enteró."""
+        if not self.guardia.activa:
+            return
+        # En privado le contesto en el mismo chat (ahí seguro llega); desde un grupo, por privado.
+        destino = None if fuente.IsGroup else JID(User=fuente.Chat.User, Server=fuente.Chat.Server)
+        try:
+            await self.guardia.recordar_pendientes(destino)
+        except Exception:
+            log.exception("No pude avisarle al dueño de los grupos que esperan permiso")
+
     async def _grupo_permitido(self, ev: MessageEv) -> bool:
         """En grupos que el dueño no autorizó, el bot solo le contesta al dueño."""
         fuente = ev.Info.MessageSource
         chat = jid_a_texto(fuente.Chat)
         if self.guardia.permitido(chat):
             return True
-        if (numero_de(fuente.Sender) or numero_de(fuente.SenderAlt)) in self.config.duenos:
+        if self._es_de_un_dueno(fuente):
             return True
         if self.almacen.estado_grupo(chat) is None:  # entró sin que nos enteráramos: pedimos permiso igual
             await self.guardia.pedir_permiso(fuente.Chat)

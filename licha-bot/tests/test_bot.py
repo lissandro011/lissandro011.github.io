@@ -17,6 +17,7 @@ from neonize.proto.Neonize_pb2 import (
     GroupInfo,
     GroupName,
     GroupParticipant,
+    IsOnWhatsAppResponse,
     SendResponse,
     UploadResponse,
 )
@@ -104,6 +105,10 @@ class ClienteFalso:
         self.subidas: list[bytes] = []
         self.descargados: list[Message] = []
         self.detenido = False
+        self.fuera_de_whatsapp: set[str] = set()  # números que "no existen" en WhatsApp
+        self.otro_numero: dict[str, str] = {}  # número de config.toml → número real en WhatsApp
+        self.destinos_que_fallan: set[str] = set()  # JIDs a los que no se puede mandar nada
+        self.consultas_whatsapp: list[str] = []
 
     def _respuesta(self) -> SendResponse:
         return SendResponse(ID=f"BOT{next(self._ids_enviados)}")
@@ -114,8 +119,26 @@ class ClienteFalso:
         return self._respuesta()
 
     async def send_message(self, to, message, **_):
+        if f"{to.User}@{to.Server}" in self.destinos_que_fallan:
+            raise RuntimeError("no se pudo mandar el mensaje")
         self.enviados.append((to, message))
         return self._respuesta()
+
+    async def is_on_whatsapp(self, *numeros):
+        self.consultas_whatsapp += list(numeros)
+        respuestas = []
+        for consulta in numeros:
+            numero = consulta.lstrip("+")
+            if numero in self.fuera_de_whatsapp:
+                respuestas.append(IsOnWhatsAppResponse(Query=consulta, IsIn=False))
+                continue
+            real = self.otro_numero.get(numero, numero)
+            respuestas.append(
+                IsOnWhatsAppResponse(
+                    Query=consulta, IsIn=True, JID=JID(User=real, Server="s.whatsapp.net")
+                )
+            )
+        return respuestas
 
     async def build_reaction(self, chat, sender, message_id, reaction):
         return Message(reactionMessage=ReactionMessage(text=reaction))
