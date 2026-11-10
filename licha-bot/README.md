@@ -100,11 +100,34 @@ Desde **otro número** (el bot no contesta sus propios mensajes):
 ### Paso 8: dejarlo prendido 24/7
 
 1. **Que arranque solo:** doble clic en **`activar_inicio_automatico.bat`**. Desde ahora, cada vez que inicies sesión en Windows, el bot se abre minimizado. Para sacarlo: `desactivar_inicio_automatico.bat`.
-2. **Que la PC no se suspenda:** Configuración > Sistema > **Inicio/apagado y batería** (o **Energía**) > "Suspender" o "Apagar pantalla y suspender": poné **Nunca** en suspender (la pantalla sí se puede apagar).
+2. **Que no se duerma (ni al cerrar la tapa de la notebook):** doble clic en **`activar_no_dormir.bat`** y aceptá los permisos de administrador. Deja la notebook despierta con la tapa cerrada y le saca la suspensión automática. Para volver atrás: `desactivar_no_dormir.bat`. Ver [Cerrar la notebook sin apagar el bot](#cerrar-la-notebook-sin-apagar-el-bot).
 3. **Que Windows Update no la reinicie en cualquier momento:** Configuración > Windows Update > Opciones avanzadas > **Horas activas**.
 4. Si el bot se cae o se corta internet, `iniciar.bat` lo vuelve a levantar solo a los 15 segundos.
 
 Para apagarlo, cerrá su ventana (o mandale `!apagar` desde un número de dueño).
+
+---
+
+## Cerrar la notebook sin apagar el bot
+
+Por defecto Windows suspende la notebook cuando cerrás la tapa, y con la notebook suspendida el bot **deja de andar**: no contesta nada hasta que la abrís de nuevo.
+
+Doble clic en **`activar_no_dormir.bat`** (pide permisos de administrador, decile que sí). Eso deja:
+
+- **Al cerrar la tapa: no hacer nada**, así el bot sigue conectado.
+- **Nunca suspender ni hibernar sola.**
+- Te pregunta si querés lo mismo **sin estar enchufada**. Si decís que no (lo recomendado), con batería sigue durmiéndose al cerrarla y no se te gasta.
+
+Para volver a la configuración normal de Windows: **`desactivar_no_dormir.bat`**.
+
+Un par de cosas a tener en cuenta:
+
+- **La pantalla se apaga igual** y eso no molesta al bot. Solo importa que la PC no se *suspenda*.
+- **Dejala enchufada y en un lugar ventilado**: con la tapa cerrada se calienta más. Si la ves muy caliente, mejor dejala abierta.
+- **No cierres la ventana negra del bot**, es la que lo tiene prendido. Para que vuelva solo después de un reinicio, usá `activar_inicio_automatico.bat`.
+- Si la notebook igual se duerme, puede ser el programa de energía de la marca (Lenovo Vantage, Dell Power Manager, MyASUS, HP Support Assistant). Buscá ahí la opción de la tapa.
+
+También lo podés hacer a mano, sin los `.bat`: Panel de control > Opciones de energía > **Elegir el comportamiento del cierre de la tapa** > *No hacer nada*.
 
 ---
 
@@ -244,6 +267,8 @@ Si un comando necesita otra librería de Python, instalala dentro del entorno de
 
 **No me llegó el aviso para autorizar un grupo**: escribile cualquier cosa por privado (por ejemplo `!ping`) y te lo cuenta ahí mismo. Si pasa siempre, revisá `duenos` en `config.toml` y buscá `no está en WhatsApp` en `logs\licha-bot.log`.
 
+**Dejó de contestar cuando cerré la notebook**: Windows la suspendió. Abrí `activar_no_dormir.bat` (ver [Cerrar la notebook sin apagar el bot](#cerrar-la-notebook-sin-apagar-el-bot)). Mientras la notebook está suspendida el bot no recibe nada; al abrirla se reconecta solo.
+
 **Pone ⏳ y no responde**: esa persona mandó comandos muy seguido. Hay que esperar 3 segundos entre comandos (`espera_entre_comandos`). Los dueños no tienen esa espera.
 
 **"El bot se desvinculó" o pide vincular de nuevo**: pasa si lo sacás desde "Dispositivos vinculados" o si el celular del chip pasó 14 días sin conexión. Abrí `iniciar.bat` y vinculalo otra vez. Para empezar de cero: cerrá el bot, borrá `datos\sesion.sqlite3` y abrí `iniciar.bat`.
@@ -267,6 +292,8 @@ licha-bot/
 ├── iniciar.bat                      prende el bot y lo reinicia si se cae
 ├── activar_inicio_automatico.bat    que arranque solo con Windows
 ├── desactivar_inicio_automatico.bat
+├── activar_no_dormir.bat            que la notebook no se duerma al cerrar la tapa
+├── desactivar_no_dormir.bat
 ├── config.ejemplo.toml              configuración de ejemplo (se copia a config.toml)
 ├── main.py                          punto de entrada (python main.py)
 ├── comandos/                        ← TUS COMANDOS: cada .py se carga solo
