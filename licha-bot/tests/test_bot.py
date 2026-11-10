@@ -352,9 +352,20 @@ def test_saludo_por_privado_una_sola_vez():
     procesar(bot, evento(texto("¿estás?"), de="5493333333333"))
     assert len(cliente.respuestas) == 1 and "!menu" in cliente.respuestas[0]
     procesar(bot, evento(texto("hola"), de="5494444444444", grupo=True))
-    procesar(bot, evento(imagen("hola"), de="5495555555555"))  # foto con texto: va al sticker automático
     assert len(cliente.respuestas) == 1
-    assert len(cliente.stickers()) == 1
+
+
+def test_foto_por_privado_sin_comando_no_hace_sticker_y_explica_como_pedirlo():
+    import comandos.general
+
+    comandos.general._ultimo_saludo.clear()
+    bot, cliente = crear_bot(foto())
+    procesar(bot, evento(imagen(), de="5495555555555"))
+    procesar(bot, evento(imagen(), de="5495555555555"))
+    assert cliente.stickers() == [] and cliente.descargados == []
+    assert len(cliente.respuestas) == 1 and "!s" in cliente.respuestas[0]  # lo explica una sola vez
+    procesar(bot, evento(imagen("!s"), de="5495555555555"))
+    assert len(cliente.stickers()) == 1  # con el comando, sí
 
 
 def test_no_responde_en_grupos_si_esta_desactivado():
@@ -442,16 +453,16 @@ def test_archivo_muy_pesado_no_se_descarga():
     assert cliente.descargados == []
 
 
-def test_sticker_automatico_por_privado():
-    bot, cliente = crear_bot(foto())
+def test_sticker_automatico_por_privado_solo_si_se_activa():
+    bot, cliente = crear_bot(foto(), stickers={"automatico_en_privado": True})
     procesar(bot, evento(imagen()))
     assert len(cliente.stickers()) == 1
 
 
-def test_sin_sticker_automatico_en_grupos_ni_si_esta_desactivado():
-    bot, cliente = crear_bot(foto())
+def test_sin_sticker_automatico_en_grupos_ni_por_defecto():
+    bot, cliente = crear_bot(foto(), stickers={"automatico_en_privado": True})
     procesar(bot, evento(imagen(), grupo=True))
-    bot2, cliente2 = crear_bot(foto(), stickers={"automatico_en_privado": False})
+    bot2, cliente2 = crear_bot(foto(), bot={"saludar_por_privado": False})
     procesar(bot2, evento(imagen()))
     assert cliente.enviados == [] and cliente2.enviados == []
 

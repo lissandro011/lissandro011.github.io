@@ -11,7 +11,7 @@ def test_el_ejemplo_es_valido_y_trae_los_valores_por_defecto():
     assert cfg.prefijo == "!"
     assert cfg.duenos == frozenset()
     assert cfg.stickers.paquete == "Licha Bot"
-    assert cfg.stickers.automatico_en_privado is True
+    assert cfg.stickers.automatico_en_privado is False
     assert cfg.nivel_log == "INFO"
 
 

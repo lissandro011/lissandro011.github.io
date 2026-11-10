@@ -454,7 +454,7 @@ EXCUSA_OTRA = (
 
 @comando(
     "excusa", "excusas", "zafar",
-    categoria="Para el grupo",
+    categoria="Para grupos",
     descripcion="Te doy una excusa para bajarte del plan. Mandarla te toca a vos.",
     uso="{p}excusa → una excusa lista para reenviar\nSi no te convence, mandá {p}excusa de nuevo y te paso otra.",
 )  # fmt: skip
