@@ -1,4 +1,4 @@
-"""Comandos generales: menú de ayuda, ping y saludo por privado."""
+"""Comandos generales: menú, ayuda, ping y saludo por privado."""
 
 from __future__ import annotations
 
@@ -9,12 +9,134 @@ from licha_bot.comandos import Comando
 from licha_bot.contexto import Contexto
 from licha_bot.mensajes import media_de
 
-# Orden de las categorías en el menú: las que no están acá van primero, por orden alfabético.
-ORDEN_CATEGORIAS = {"General": 1, "Dueño": 2}
+# --------------------------------------------------------------------------- #
+# !menu
+# --------------------------------------------------------------------------- #
+
+SALUDO_PRIMERA_VEZ = "Elegí bien la foto que después te la mandan a vos jajaj"
+SALUDOS_MENU = (
+    "Acá está todo. Elegí tranquilo.",
+    "A ver, ¿qué necesitás?",
+    "Yo tiro la moneda. Después se arreglan ustedes.",
+    "Si venías por una excusa, está un poquito más abajo.",
+    "Abriste el menú. Yo también entro a mirar y después pido lo mismo.",
+)
+
+# (comando, lo que va después del nombre, descripción). Un comando que no esté
+# cargado no aparece; los comandos nuevos que no están acá van a "Otros".
+SECCIONES_MENU: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
+    ("🎲 *Para jugar*", (
+        ("dado", "", "Tirá uno o varios dados."),
+        ("moneda", "", "Cara o cruz. Después bancate lo que salga."),
+        ("8ball", "", "Haceme una pregunta de sí o no."),
+        ("elegir", "", "Pasame las opciones que ya sé que no se ponen de acuerdo."),
+        ("top5", "", "Armo el ranking del grupo. Los reclamos van al que lo pidió."),
+    )),
+    ("🍕 *Para el grupo*", (
+        ("confirmo", "armar <plan>", "Abrí la lista. Cada uno pone voy, capaz o me bajo."),
+        ("decreto", "<regla>", "Proponé una regla y que el grupo la vote."),
+        ("excusa", "", "Te doy una excusa para bajarte del plan. Mandarla te toca a vos."),
+    )),
+    ("🖼️ *Stickers*", (
+        ("sticker", "", "Pasá una foto, video o GIF a sticker."),
+        ("imagen", "", "Convertí un sticker en foto."),
+    )),
+    ("⚙️ *General*", (
+        ("menu", "", "Volvé a ver los comandos."),
+        ("ping", "", "Fijate si sigo vivo."),
+        ("ayuda", "<comando>", "Te muestro cómo se usa."),
+    )),
+)  # fmt: skip
+SECCION_DUENO = (
+    ("reiniciar", "", "Me apagás y me prendés."),
+    ("apagar", "", "Hasta acá llegué."),
+)
+EXTRAS_DUENO = (
+    ("autorizar", "<código>", "Me dejás quedarme en un grupo que me agregaron."),
+    ("rechazar", "<código>", "Me saco de ese grupo."),
+    ("grupos", "", "Grupos donde estoy y los que esperan tu permiso."),
+)
 
 
 def puede_ver(ctx: Contexto, cmd: Comando) -> bool:
     return not cmd.solo_dueno or ctx.es_dueno
+
+
+def linea_menu(ctx: Contexto, cmd: Comando, args: str, texto: str) -> str:
+    nombre = f"{ctx.prefijo}{cmd.nombre}" + (f" {args}" if args else "")
+    if cmd.solo_grupos and not ctx.es_grupo:
+        nombre += " (solo grupos)"
+    return f"• {nombre} — {texto}"
+
+
+def armar_menu(ctx: Contexto, saludo: str) -> str:
+    p = ctx.prefijo
+    registro = ctx.bot.registro
+    mostrados: set[str] = set()
+    lineas = [f"🤖 *{ctx.config.nombre}*", "", "Mandame una foto, video o GIF y te lo hago sticker.", saludo]
+
+    for titulo, comandos in SECCIONES_MENU:
+        filas = []
+        for nombre, args, texto in comandos:
+            cmd = registro.buscar(nombre)
+            if cmd is not None and puede_ver(ctx, cmd) and cmd.nombre not in mostrados:
+                mostrados.add(cmd.nombre)
+                filas.append(linea_menu(ctx, cmd, args, texto))
+        if filas:
+            lineas += ["", titulo, *filas]
+
+    dueno = [(registro.buscar(n), a, t) for n, a, t in SECCION_DUENO]
+    if ctx.es_dueno and all(cmd is not None for cmd, _, _ in dueno):
+        extras = [(registro.buscar(n), a, t) for n, a, t in EXTRAS_DUENO]
+        filas = [linea_menu(ctx, cmd, a, t) for cmd, a, t in dueno + extras if cmd is not None]
+        mostrados.update(cmd.nombre for cmd, _, _ in dueno + extras if cmd is not None)
+        lineas += ["", "🔒 *Solo Licha*", *filas]
+
+    otros = [
+        c for c in registro.todos()
+        if c.nombre not in mostrados and not c.oculto and puede_ver(ctx, c)
+    ]  # fmt: skip
+    if otros:
+        filas = [
+            linea_menu(ctx, c, "", c.descripcion or "Mirá cómo se usa con " + f"{p}ayuda {c.nombre}") for c in otros
+        ]
+        lineas += ["", "➕ *Otros*", *filas]
+
+    lineas.append("")
+    if ctx.es_grupo and registro.buscar("confirmo"):
+        lineas.append(f"¿Armamos algo? Probá con *{p}confirmo armar previa del sábado*.")
+    elif registro.buscar("elegir"):
+        lineas.append(f"¿Lo dejamos a la suerte? Probá con *{p}elegir bondi o Uber*.")
+    lineas.append(f"Para ver cómo se usa uno, mandá *{p}ayuda sticker*.")
+    return "\n".join(lineas)
+
+
+@comando(
+    "menu", "comandos",
+    categoria="General",
+    descripcion="Volvé a ver los comandos.",
+    uso="{p}menu",
+)  # fmt: skip
+async def menu(ctx: Contexto) -> None:
+    if ctx.args:  # "!menu sticker" funciona como "!ayuda sticker"
+        await ayuda(ctx)
+        return
+    if ctx.bot.almacen.primera_vez_menu(ctx.clave_chat):
+        saludo = SALUDO_PRIMERA_VEZ
+    else:
+        saludo = ctx.frase("menu.saludo", SALUDOS_MENU)
+    await ctx.responder(armar_menu(ctx, saludo))
+
+
+# --------------------------------------------------------------------------- #
+# !ayuda
+# --------------------------------------------------------------------------- #
+
+AYUDA_FALTA = (
+    "Probá con {p}ayuda sticker. Cambiá “sticker” por el comando que quieras.",
+    "¿De cuál? Por ejemplo: {p}ayuda decreto",
+)
+AYUDA_DESCONOCIDO = "Ese no lo tengo. Fijate en {p}menu o probá con {p}ayuda confirmo."
 
 
 def detalle(ctx: Contexto, cmd: Comando) -> str:
@@ -26,36 +148,50 @@ def detalle(ctx: Contexto, cmd: Comando) -> str:
 
 
 @comando(
-    "menu", "ayuda", "help", "comandos",
-    descripcion="Muestra la lista de comandos",
-    uso="{p}menu → lista de comandos\n{p}ayuda sticker → cómo se usa un comando",
+    "ayuda", "help",
+    categoria="General",
+    descripcion="Te muestro cómo se usa.",
+    uso="{p}ayuda sticker\n{p}ayuda confirmo\n{p}ayuda decreto",
 )  # fmt: skip
-async def menu(ctx: Contexto) -> None:
-    p = ctx.prefijo
-    registro = ctx.bot.registro
+async def ayuda(ctx: Contexto) -> None:
+    if not ctx.args:
+        raise ErrorUsuario(ctx.frase("ayuda.falta", AYUDA_FALTA))
+    buscado = ctx.args[0].lstrip("".join(ctx.config.prefijos))
+    cmd = ctx.bot.registro.buscar(buscado)
+    if cmd is None or not puede_ver(ctx, cmd):
+        raise ErrorUsuario(AYUDA_DESCONOCIDO.format(p=ctx.prefijo))
+    await ctx.responder(detalle(ctx, cmd))
 
-    if ctx.args:
-        buscado = ctx.args[0].lstrip("".join(ctx.config.prefijos))
-        cmd = registro.buscar(buscado)
-        if cmd is None or not puede_ver(ctx, cmd):
-            raise ErrorUsuario(f"No conozco el comando {p}{buscado}. Escribí {p}menu para ver la lista.")
-        await ctx.responder(detalle(ctx, cmd))
-        return
 
-    lineas = [f"🤖 *{ctx.config.nombre}*", ""]
-    if not ctx.es_grupo and ctx.config.stickers.automatico_en_privado:
-        lineas += ["Por acá, mandame una foto, video o GIF y te lo devuelvo como sticker.", ""]
+# --------------------------------------------------------------------------- #
+# !ping
+# --------------------------------------------------------------------------- #
 
-    grupos = registro.por_categoria()
-    for categoria in sorted(grupos, key=lambda c: (ORDEN_CATEGORIAS.get(c, 0), c)):
-        visibles = [c for c in grupos[categoria] if puede_ver(ctx, c)]
-        if not visibles:
-            continue
-        lineas.append(f"*{categoria}*")
-        lineas += [f"• {p}{c.nombre} — {c.descripcion}" if c.descripcion else f"• {p}{c.nombre}" for c in visibles]
-        lineas.append("")
-    lineas.append(f"Para ver cómo se usa uno: {p}ayuda sticker")
-    await ctx.responder("\n".join(lineas))
+PING_PRIMERO = (
+    "Pong 🏓",
+    "Acá estoy 🏓",
+    "Te leo.",
+    "Presente.",
+    "🏓 Volvió.",
+)
+PING_SEGUNDO = (
+    "Sigo acá.",
+    "Sí, amigo. Te leo.",
+    "Dos de dos 🏓",
+    "Acá también en la segunda.",
+    "Te llegó el pong de vuelta.",
+)
+PING_RACHA = (
+    "Sigo acá, amigo. ¿Qué pasó?",
+    "Si querías charlar podías decir hola jajaj",
+    "Me tenés haciendo pretemporada 🏓",
+    "Te leo desde el primero. Contame.",
+    "Decime, ¿qué estamos midiendo?",
+    "¿Pruebas técnicas o estás al pedo?",
+    "¿Qué pasó, te encariñaste con el pong?",
+    "Mientras vos pongas ping, yo sigo laburando.",
+    "Acá. Ahora te toca sacar a vos 🏓",
+)
 
 
 def duracion_legible(segundos: float) -> str:
@@ -73,12 +209,29 @@ def duracion_legible(segundos: float) -> str:
     return " ".join(partes)
 
 
-@comando("ping", "estado", descripcion="Muestra si el bot está funcionando")
+@comando(
+    "ping", "estado",
+    categoria="General",
+    descripcion="Fijate si sigo vivo.",
+    uso="{p}ping\n{p}estado → también te digo hace cuánto estoy prendido",
+)  # fmt: skip
 async def ping(ctx: Contexto) -> None:
-    await ctx.responder(
-        f"🏓 ¡Pong! {ctx.config.nombre} está funcionando hace {duracion_legible(ctx.bot.segundos_activo)}."
-    )
+    # La racha es por chat y persona; cualquier otro comando de esa persona la corta.
+    racha = ctx.bot.memoria.racha(ctx.clave_chat, ctx.persona, "ping", cortar=ctx.anterior not in (None, "ping"))
+    if racha.numero == 1:
+        texto = ctx.frase("ping.1", PING_PRIMERO)
+    elif racha.numero == 2:
+        texto = ctx.frase("ping.2", PING_SEGUNDO)
+    else:
+        texto = ctx.frase("ping.3", PING_RACHA)
+    if ctx.comando.casefold() == "estado":
+        texto += f"\nPrendido hace {duracion_legible(ctx.bot.segundos_activo)}."
+    await ctx.responder(texto)
 
+
+# --------------------------------------------------------------------------- #
+# Saludo por privado
+# --------------------------------------------------------------------------- #
 
 SEGUNDOS_ENTRE_SALUDOS = 6 * 3600
 _ultimo_saludo: dict[str, float] = {}

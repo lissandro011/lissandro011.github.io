@@ -8,6 +8,7 @@ import os
 import sqlite3
 import sys
 import time
+from collections import OrderedDict
 from collections.abc import Coroutine
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from neonize.aioze.events import (
     ConnectedEv,
     ConnectFailureEv,
     DisconnectedEv,
+    JoinedGroupEv,
     LoggedOutEv,
     MessageEv,
     PairStatusEv,
@@ -25,11 +27,14 @@ from neonize.aioze.events import (
 from neonize.proto.waCompanionReg.WAWebProtobufsCompanionReg_pb2 import DeviceProps
 from neonize.utils.enum import ClientName
 
+from .almacen import Almacen
 from .comandos import REGISTRO, Comando, Registro
 from .config import Config
 from .contexto import Contexto, copiar_evento
 from .errores import ErrorUsuario
-from .mensajes import jid_a_texto, parsear_comando, texto_de
+from .frases import Bolsas, Memoria
+from .guardia import Guardia
+from .mensajes import jid_a_texto, numero_de, parsear_comando, texto_de
 
 log = logging.getLogger("licha.bot")
 
@@ -44,6 +49,14 @@ SALIDA_REINICIAR = 3  # !reiniciar
 SERVIDORES_PERMITIDOS = frozenset({"s.whatsapp.net", "lid", "g.us"})
 ERROR_GENERICO = "Algo salió mal con ese comando 😕 Probá de nuevo en un rato."
 TIEMPO_PARA_VINCULAR = 180  # segundos para ingresar el código en el teléfono
+MENSAJES_RECORDADOS = 2000  # para no procesar dos veces el mismo mensaje
+
+SIN_PERMISO = (
+    "Mirá la confianza que agarró. Ese comando es del dueño.",
+    "Ese botón lo toca el dueño, amigo.",
+    "Buena iniciativa. Te falta ser el dueño.",
+    "Te leí. Para eso tiene que venir el dueño.",
+)
 
 
 def sesion_guardada(archivo: Path) -> bool:
@@ -69,9 +82,16 @@ def _silenciar_aviso_ffmpeg() -> None:
 
 
 class LichaBot:
-    def __init__(self, config: Config, registro: Registro = REGISTRO, cliente: Any = None):
+    def __init__(
+        self, config: Config, registro: Registro = REGISTRO, cliente: Any = None, almacen: Almacen | None = None
+    ):
         self.config = config
         self.registro = registro
+        self.frases = Bolsas()
+        self.memoria = Memoria(config.enseguida_segundos)
+        self.guardia = Guardia(self)
+        self._almacen = almacen
+        self._vistos: OrderedDict[str, None] = OrderedDict()
         self.inicio = time.monotonic()
         self.codigo_salida = SALIDA_OK
         self.limite_tareas = asyncio.Semaphore(config.tareas_pesadas_simultaneas)
@@ -97,8 +117,16 @@ class LichaBot:
         cliente.event(ConnectFailureEv)(self._al_fallar_conexion)
         cliente.event(TemporaryBanEv)(self._al_ser_suspendido)
         cliente.event(MessageEv)(self._al_recibir_mensaje)
+        cliente.event(JoinedGroupEv)(self._al_unirse_a_grupo)
         cliente.qr(self._al_recibir_qr)
         return cliente
+
+    @property
+    def almacen(self) -> Almacen:
+        """Datos guardados (votaciones, listas, grupos autorizados). Se abre la primera vez que se usa."""
+        if self._almacen is None:
+            self._almacen = Almacen(self.config.archivo_datos)
+        return self._almacen
 
     @property
     def segundos_activo(self) -> float:
@@ -233,6 +261,24 @@ class LichaBot:
             comandos,
             self.config.prefijo,
         )
+        self._en_segundo_plano(self._preparar_grupos())
+
+    async def _preparar_grupos(self) -> None:
+        try:
+            await self.guardia.preparar()
+        except Exception:
+            log.exception("No pude revisar los grupos autorizados")
+
+    async def _al_unirse_a_grupo(self, _: NewAClient, ev: JoinedGroupEv) -> None:
+        try:
+            await self.guardia.al_unirse(
+                ev.GroupInfo.JID,
+                ev.GroupInfo.GroupName.Name,
+                ev.Sender if ev.HasField("Sender") else None,
+                ev.SenderPN if ev.HasField("SenderPN") else None,
+            )
+        except Exception:
+            log.exception("Error al entrar a un grupo")
 
     async def _al_desconectar(self, _: NewAClient, __: DisconnectedEv) -> None:
         if not self._deteniendo:
@@ -284,6 +330,11 @@ class LichaBot:
         if self._es_viejo(ev):
             log.debug("Ignoro el mensaje viejo %s", ev.Info.ID)
             return
+        if self._repetido(ev):
+            log.debug("Ignoro el mensaje repetido %s", ev.Info.ID)
+            return
+        if fuente.IsGroup and not await self._grupo_permitido(ev):
+            return
 
         pedido = parsear_comando(texto_de(ev.Message), cfg.prefijos)
         if pedido is not None:
@@ -303,13 +354,43 @@ class LichaBot:
         if self.registro.oyentes:
             await self._avisar_oyentes(Contexto(self, ev))
 
+    def _repetido(self, ev: MessageEv) -> bool:
+        """True si ese mensaje ya se procesó (WhatsApp a veces manda el mismo evento dos veces)."""
+        fuente = ev.Info.MessageSource
+        clave = f"{jid_a_texto(fuente.Chat)}|{jid_a_texto(fuente.Sender)}|{ev.Info.ID}"
+        if not ev.Info.ID:
+            return False
+        if clave in self._vistos:
+            return True
+        self._vistos[clave] = None
+        if len(self._vistos) > MENSAJES_RECORDADOS:
+            self._vistos.popitem(last=False)
+        return False
+
+    async def _grupo_permitido(self, ev: MessageEv) -> bool:
+        """En grupos que el dueño no autorizó, el bot solo le contesta al dueño."""
+        fuente = ev.Info.MessageSource
+        chat = jid_a_texto(fuente.Chat)
+        if self.guardia.permitido(chat):
+            return True
+        if (numero_de(fuente.Sender) or numero_de(fuente.SenderAlt)) in self.config.duenos:
+            return True
+        if self.almacen.estado_grupo(chat) is None:  # entró sin que nos enteráramos: pedimos permiso igual
+            await self.guardia.pedir_permiso(fuente.Chat)
+        return False
+
     async def _ejecutar_comando(self, cmd: Comando, ctx: Contexto) -> None:
         donde = "un grupo" if ctx.es_grupo else "privado"
         if cmd.solo_dueno and not ctx.es_dueno:
-            await ctx.responder("Ese comando es solo para el dueño del bot 🔒")
+            await ctx.responder(ctx.frase("sin_permiso", SIN_PERMISO))
             return
         if cmd.solo_grupos and not ctx.es_grupo:
-            await ctx.responder("Ese comando solo funciona en grupos.")
+            p = ctx.prefijo
+            extra = [f"{p}{n}" for n in ("excusa", "elegir") if self.registro.buscar(n)]
+            texto = f"{p}{cmd.nombre} se usa en grupos. Probalo en un grupo donde esté yo."
+            if extra:
+                texto += f" Por acá podés usar {' o '.join(extra)}."
+            await ctx.responder(texto)
             return
         if cmd.solo_privado and ctx.es_grupo:
             await ctx.responder("Ese comando solo funciona por privado.")
@@ -323,6 +404,7 @@ class LichaBot:
             await ctx.reaccionar("⏳")
             return
         self._ultimo_comando[clave] = ahora
+        ctx.anterior = self.memoria.anotar_comando(jid_a_texto(ctx.chat), ctx.persona, cmd.nombre)
 
         log.info("%s%s de %s (%s) en %s", ctx.prefijo, ctx.comando, ctx.nombre, ctx.numero or clave, donde)
         inicio = time.monotonic()

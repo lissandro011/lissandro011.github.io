@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 import re
 import shutil
-import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+import tomllib
 
 from .conversor import OpcionesSticker
 
@@ -45,6 +46,12 @@ class ConfigStickers:
 
 
 @dataclass(frozen=True)
+class ConfigGrupos:
+    solo_el_dueno_agrega: bool = True
+    minutos_para_autorizar: float = 10.0
+
+
+@dataclass(frozen=True)
 class Config:
     nombre: str = "Licha Bot"
     numero: str | None = None
@@ -57,10 +64,13 @@ class Config:
     avisar_comando_desconocido: bool = True
     saludar_por_privado: bool = True
     tareas_pesadas_simultaneas: int = 2
+    enseguida_segundos: float = 90.0  # cuánto es "enseguida" para las rachas (!moneda, !ping, !excusa)
     stickers: ConfigStickers = field(default_factory=ConfigStickers)
+    grupos: ConfigGrupos = field(default_factory=ConfigGrupos)
     nivel_log: str = "INFO"
     nivel_log_whatsapp: str = "WARNING"
     archivo_sesion: Path = CARPETA_BOT / "datos" / "sesion.sqlite3"
+    archivo_datos: Path = CARPETA_BOT / "datos" / "licha.sqlite3"  # votaciones, listas y grupos autorizados
     carpeta_logs: Path = CARPETA_BOT / "logs"
     datos: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
 
@@ -146,6 +156,7 @@ def desde_dict(datos: dict[str, Any]) -> Config:
     bot = _Lector(datos, "bot")
     stk = _Lector(datos, "stickers")
     reg = _Lector(datos, "registro")
+    grp = _Lector(datos, "grupos")
 
     numero = bot.texto("numero", "")
     prefijos = tuple(bot.lista_textos("prefijos", ["!", "."]))
@@ -166,6 +177,7 @@ def desde_dict(datos: dict[str, Any]) -> Config:
         avisar_comando_desconocido=bot.booleano("avisar_comando_desconocido", True),
         saludar_por_privado=bot.booleano("saludar_por_privado", True),
         tareas_pesadas_simultaneas=int(bot.numero("tareas_pesadas_simultaneas", 2, minimo=1, entero=True)),
+        enseguida_segundos=bot.numero("enseguida_segundos", 90, minimo=1),
         stickers=ConfigStickers(
             paquete=stk.texto("paquete", "Licha Bot"),
             autor=stk.texto("autor", "Licha Bot"),
@@ -173,6 +185,10 @@ def desde_dict(datos: dict[str, Any]) -> Config:
             automatico_en_privado=stk.booleano("automatico_en_privado", True),
             max_segundos_video=stk.numero("max_segundos_video", 10, minimo=1),
             max_mb_descarga=int(stk.numero("max_mb_descarga", 25, minimo=1, entero=True)),
+        ),
+        grupos=ConfigGrupos(
+            solo_el_dueno_agrega=grp.booleano("solo_el_dueno_agrega", True),
+            minutos_para_autorizar=grp.numero("minutos_para_autorizar", 10, minimo=1),
         ),
         nivel_log=reg.nivel("nivel", "INFO"),
         nivel_log_whatsapp=reg.nivel("nivel_whatsapp", "WARNING"),

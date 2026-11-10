@@ -33,6 +33,9 @@ Lo que podés usar dentro de un comando (ctx):
   await ctx.enviar_imagen(jpeg, "pie")   manda una foto
   await ctx.enviar_sticker(webp)         manda un sticker
   await ctx.en_segundo_plano(f, ...)     corre algo lento sin trabar al bot
+  ctx.frase("banco", FRASES, dato=x)     elige una frase de la lista sin repetir
+                                         hasta usarlas todas (completa {dato})
+  ctx.bot.almacen                        datos guardados (ver licha_bot/almacen.py)
 
   raise ErrorUsuario("mensaje")          corta el comando y responde ese mensaje
 

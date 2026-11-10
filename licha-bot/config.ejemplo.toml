@@ -42,6 +42,10 @@ saludar_por_privado = true
 # Cuántos stickers (o tareas pesadas) se procesan a la vez.
 tareas_pesadas_simultaneas = 2
 
+# Segundos que cuentan como "enseguida": si alguien repite !moneda, !ping o
+# !excusa antes de este tiempo, Licha se da cuenta y lo carga.
+enseguida_segundos = 90
+
 
 [stickers]
 # Lo que muestra WhatsApp al tocar un sticker: nombre del paquete y autor.
@@ -61,6 +65,18 @@ max_segundos_video = 10
 
 # Archivos más pesados que esto (en MB) no se descargan.
 max_mb_descarga = 25
+
+
+[grupos]
+# Si es true, solo los dueños (los números de "duenos") pueden agregar el bot a
+# un grupo. Si lo agrega otra persona, el bot le avisa al dueño por privado y
+# espera su permiso (!autorizar o !rechazar). Si no hay respuesta, se va solo.
+# Los grupos donde el bot ya estaba quedan autorizados.
+# Necesita al menos un número en "duenos"; si la lista está vacía, no se aplica.
+solo_el_dueno_agrega = true
+
+# Minutos que espera el permiso del dueño antes de irse del grupo.
+minutos_para_autorizar = 10
 
 
 [registro]

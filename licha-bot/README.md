@@ -7,6 +7,8 @@ Bot de WhatsApp que hace stickers, pensado para correr en una PC con Windows y p
 - **Sticker → sticker con tu nombre**: respondé a cualquier sticker con `!s Mi pack | Mi nombre`.
 - **Sticker → foto**: respondé a un sticker con `!imagen`.
 - **Por privado es automático**: cualquier foto, video o GIF que le manden vuelve como sticker.
+- **Para jugar y para el grupo**: dado, moneda, bola 8, elegir, ranking, excusas, votar reglas (`!decreto`) y armar planes (`!confirmo`), con respuestas de amigo argentino que se dan cuenta de lo que acaba de pasar.
+- **Solo el dueño lo mete en grupos**: si lo agrega otra persona, le pide permiso al dueño y, si no lo autoriza, se va.
 - **Comandos nuevos**: se agregan con un archivo `.py` en la carpeta `comandos` y aparecen solos en `!menu`.
 
 Está hecho en Python con [neonize](https://github.com/krypton-byte/neonize), que se conecta a WhatsApp como un "dispositivo vinculado" (igual que WhatsApp Web). Los stickers se hacen con Pillow y PyAV, así que **no hace falta instalar ffmpeg ni ningún otro programa** aparte de Python.
@@ -67,7 +69,7 @@ duenos = ["5491198765432"]    # TU número personal
 
 **Formato del número:** código de país + número, solo dígitos y sin `+`. En Argentina: **54 + 9 + código de área sin el 0 + número sin el 15**. Por ejemplo, (011) 15-2345-6789 se escribe `5491123456789`, y (0341) 15-555-1234 se escribe `5493415551234`.
 
-`duenos` es para los comandos de dueño (`!reiniciar`, `!apagar`). Las demás opciones (prefijos, nombre del paquete de stickers, marca de agua, etc.) están explicadas en el mismo archivo. Guardá con **Archivo > Guardar**.
+`duenos` es para los comandos de dueño (`!reiniciar`, `!apagar`, `!autorizar`) y para decidir en qué grupos se queda el bot (ver [Grupos](#grupos-solo-el-dueño-agrega-al-bot)). Las demás opciones (prefijos, nombre del paquete de stickers, marca de agua, etc.) están explicadas en el mismo archivo. Guardá con **Archivo > Guardar**.
 
 ### Paso 6: prender el bot y vincular el número
 
@@ -94,7 +96,7 @@ Desde **otro número** (el bot no contesta sus propios mensajes):
 
 1. Escribile `!menu` por privado: te contesta la lista de comandos.
 2. Mandale una foto: te la devuelve como sticker.
-3. Agregalo a un grupo y mandá una foto con el texto `!s`.
+3. Agregalo a un grupo **desde tu número de dueño** y mandá una foto con el texto `!s`.
 
 ### Paso 8: dejarlo prendido 24/7
 
@@ -111,23 +113,63 @@ Para apagarlo, cerrá su ventana (o mandale `!apagar` desde un número de dueño
 
 Los comandos funcionan con `!` o con `.` adelante (`!s` y `.s` son lo mismo). Se cambia en `prefijos` de `config.toml`.
 
+**Para jugar**
+
 | Comando | Qué hace |
 |---|---|
-| `!sticker` · `!s` | Foto, video, GIF o sticker → sticker. Mandalo como pie de la foto o respondiendo a una. |
-| `!s recortar` | Igual, pero recorta al centro y llena el cuadrado (sin bordes transparentes). |
-| `!s Mi pack \| Mi nombre` | Cambia el nombre del paquete y el autor que muestra WhatsApp al tocar el sticker. |
-| `!imagen` · `!toimg` | Respondiendo a un sticker, lo devuelve como foto. |
 | `!dado` · `!dado 20` · `!dado 2d6` | Tira un dado (de 6 caras, de las que digas, o varios juntos). |
-| `!moneda` | Cara o cruz. |
-| `!8ball ¿pregunta?` | La bola 8 mágica responde sí, no o quizás. |
-| `!elegir pizza, empanadas o sushi` | Elige una opción al azar para decidir. Separá con comas, `\|`, "o" o espacios. |
+| `!moneda` | Cara o cruz. Si tirás de nuevo enseguida, Licha se da cuenta. |
+| `!8ball ¿pregunta?` | La bola 8 contesta sí, no o vemos. Reconoce el clásico "¿le escribo?". |
+| `!elegir pizza, empanadas o sushi` | Elige una opción al azar. Separá con comas, `\|` o la palabra "o". |
 | `!top5 más dormilones` | (Solo grupos) Ranking en broma: etiqueta a 5 integrantes al azar. `!top 3 ...` cambia la cantidad (de 2 a 10). |
-| `!menu` · `!ayuda` | Lista de comandos. `!ayuda sticker` explica uno en detalle. |
-| `!ping` | Muestra si el bot está funcionando y hace cuánto. |
-| `!reiniciar` | (Solo dueños) Reinicia el bot, por ejemplo para cargar comandos nuevos. |
-| `!apagar` | (Solo dueños) Apaga el bot. |
+
+**Para el grupo**
+
+| Comando | Qué hace |
+|---|---|
+| `!confirmo armar previa del sábado` | (Solo grupos) Abre una lista. Cada uno pone `!confirmo voy`, `!confirmo capaz` o `!confirmo me bajo`, o responde al mensaje de la lista con "voy", "capaz" o "me bajo". |
+| `!confirmo` · `!confirmo cerrar` | Muestra el resumen o cierra la lista con el recuento final. |
+| `!decreto El que llega tarde paga el hielo` | (Solo grupos) Propone una regla para votar. Se vota con `!decreto si` / `!decreto no`. |
+| `!decreto estado` · `!decreto cerrar` | Muestra cómo va o cierra la votación (gana el sí si tiene más votos que el no). |
+| `!excusa` | Una excusa lista para reenviar y bajarte del plan. Si pedís otra enseguida, te la cambia. |
+
+Hay una lista y una votación abiertas por grupo. Las cierra quien las abrió, un admin del grupo o el dueño. Se guardan en `datos\licha.sqlite3`, así que sobreviven a un reinicio.
+
+**Stickers**
+
+| Comando | Qué hace |
+|---|---|
+| `!sticker` · `!s` | Foto, video o GIF → sticker. Mandalo como pie de la foto o respondiendo a una. |
+| `!s recortar` | Igual, pero recorta al centro y llena el cuadrado (sin bordes transparentes). |
+| `!s Mi pack \| Mi nombre` | Respondiendo a una foto o a un sticker: cambia el nombre del paquete y el autor que muestra WhatsApp. |
+| `!imagen` · `!toimg` | Respondiendo a un sticker, lo devuelve como foto. |
+
+**General y dueño**
+
+| Comando | Qué hace |
+|---|---|
+| `!menu` | Lista de comandos. |
+| `!ayuda sticker` | Cómo se usa un comando, con ejemplos. |
+| `!ping` · `!estado` | Muestra si el bot está funcionando (`!estado` también dice hace cuánto está prendido). |
+| `!reiniciar` · `!apagar` | (Solo dueños) Reinicia o apaga el bot. |
+| `!autorizar` · `!rechazar` · `!grupos` | (Solo dueños) Deciden en qué grupos se queda el bot (ver abajo). |
 
 Por privado, cualquier foto, video o GIF se convierte en sticker sin escribir nada (se desactiva con `automatico_en_privado = false`). Las fotos y videos de "ver una vez" nunca se usan.
+
+### Grupos: solo el dueño agrega al bot
+
+Con `solo_el_dueno_agrega = true` (sección `[grupos]` de `config.toml`, viene activado):
+
+- Si **un dueño** agrega al bot a un grupo, se queda y saluda.
+- Si lo agrega **otra persona**, el bot avisa en el grupo que necesita permiso y te manda por privado un mensaje con un código:
+  - `!autorizar 1234` → se queda.
+  - `!rechazar 1234` → se va del grupo.
+  - Si no contestás en `minutos_para_autorizar` (10 por defecto), se va solo.
+- Mientras espera, no le contesta a nadie en ese grupo (salvo a vos).
+- Dentro de un grupo también podés mandar `!autorizar` (se queda) o `!salir` (se va). `!grupos` te muestra dónde está y qué grupos esperan permiso.
+- Los grupos donde el bot ya estaba antes de esta función quedan autorizados solos.
+
+Necesita tu número en `duenos`. Si la lista está vacía, la restricción no se aplica (y queda un aviso en el log).
 
 ---
 
@@ -192,6 +234,8 @@ Si un comando necesita otra librería de Python, instalala dentro del entorno de
 - Si estuvo apagado, no responde mensajes de más de 10 minutos (`ignorar_mensajes_de_mas_de_minutos`).
 - Mirá la ventana o `logs\licha-bot.log`: cada comando que recibe queda anotado.
 
+**En un grupo no contesta nada**: si lo agregó alguien que no es dueño, está esperando tu permiso. Fijate en tu privado o mandale `!grupos` al bot.
+
 **Pone ⏳ y no responde**: esa persona mandó comandos muy seguido. Hay que esperar 3 segundos entre comandos (`espera_entre_comandos`). Los dueños no tienen esa espera.
 
 **"El bot se desvinculó" o pide vincular de nuevo**: pasa si lo sacás desde "Dispositivos vinculados" o si el celular del chip pasó 14 días sin conexión. Abrí `iniciar.bat` y vinculalo otra vez. Para empezar de cero: cerrá el bot, borrá `datos\sesion.sqlite3` y abrí `iniciar.bat`.
@@ -219,21 +263,25 @@ licha-bot/
 ├── main.py                          punto de entrada (python main.py)
 ├── comandos/                        ← TUS COMANDOS: cada .py se carga solo
 │   ├── stickers.py                  !sticker, !imagen y stickers automáticos
-│   ├── general.py                   !menu, !ping
-│   ├── diversion.py                 !dado, !moneda, !8ball, !elegir, !top5
-│   ├── dueno.py                     !reiniciar, !apagar
+│   ├── general.py                   !menu, !ayuda, !ping
+│   ├── diversion.py                 !dado, !moneda, !8ball, !elegir, !top5, !excusa
+│   ├── grupo.py                     !decreto y !confirmo
+│   ├── dueno.py                     !reiniciar, !apagar, !autorizar, !rechazar, !grupos
 │   └── _plantilla.py                ejemplos para copiar (no se carga)
 ├── licha_bot/                       el motor del bot
 │   ├── bot.py                       conexión con WhatsApp y despacho de comandos
 │   ├── comandos.py                  @comando, @escuchar y carga de la carpeta comandos
 │   ├── contexto.py                  el "ctx": responder, mandar stickers, descargar
+│   ├── frases.py                    bolsas de frases y rachas ("tiró la moneda otra vez")
+│   ├── almacen.py                   datos guardados: votaciones, listas, grupos (SQLite)
+│   ├── guardia.py                   quién puede meter al bot en un grupo
 │   ├── conversor.py                 foto/video/GIF → sticker (Pillow + PyAV)
 │   ├── mensajes.py                  lectura de textos, fotos y respuestas
 │   └── config.py                    lectura de config.toml
 └── tests/                           pruebas automáticas (sin WhatsApp)
 ```
 
-Se crean solos al usarlo: `.venv` (librerías), `config.toml`, `datos` (sesión de WhatsApp) y `logs`.
+Se crean solos al usarlo: `.venv` (librerías), `config.toml`, `datos` (sesión de WhatsApp, votaciones, listas y grupos autorizados) y `logs`.
 
 ## Para programadores
 
