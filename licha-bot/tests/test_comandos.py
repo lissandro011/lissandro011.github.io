@@ -714,9 +714,12 @@ def test_mensaje_repetido_se_procesa_una_sola_vez():
 NUEVO = "120363999999999999"
 
 
-def bot_con_guardia(**config):
+def bot_con_guardia(ajustar=None, **config):
+    """Bot ya conectado, con un grupo viejo autorizado. `ajustar(cliente)` corre antes de conectarse."""
     bot, cliente = crear_bot(**config)
     cliente.grupos = [GroupInfo(JID=JID(User=GRUPO, Server="g.us"), GroupName=GroupName(Name="Los de siempre"))]
+    if ajustar is not None:
+        ajustar(cliente)
     asyncio.run(bot.guardia.preparar())
     return bot, cliente
 
@@ -804,3 +807,84 @@ def test_sin_restriccion_cualquiera_puede_agregarlo():
     bot, cliente = bot_con_guardia(grupos={"solo_el_dueno_agrega": False})
     unirse(bot, quien=OTRO)
     assert bot.almacen.estado_grupo(f"{NUEVO}@g.us") == "autorizado"
+
+
+# --------------------------------------------------------------------------- #
+# El aviso por privado al dueño
+# --------------------------------------------------------------------------- #
+
+DUENO_EN_WHATSAPP = "541111111111"  # el mismo dueño, como lo conoce WhatsApp (sin el 9)
+
+
+def privado_de(numero: str) -> str:
+    return f"{numero}@s.whatsapp.net"
+
+
+def test_le_escribe_al_jid_que_usa_whatsapp_aunque_el_numero_sea_otra_forma():
+    bot, cliente = bot_con_guardia(lambda c: c.otro_numero.update({DUENO: DUENO_EN_WHATSAPP}))
+    assert cliente.consultas_whatsapp == [f"+{DUENO}"]  # lo busca una sola vez, al conectarse
+    unirse(bot, quien=OTRO)
+    destinos = dict(cliente.textos())
+    assert "me agregó al grupo" in destinos[privado_de(DUENO_EN_WHATSAPP)]
+    assert privado_de(DUENO) not in destinos
+    (pendiente,) = bot.almacen.pendientes()
+    assert pendiente.avisado
+
+
+def test_si_el_aviso_no_sale_queda_anotado_y_no_miente_en_el_grupo():
+    bot, cliente = bot_con_guardia(lambda c: c.destinos_que_fallan.add(privado_de(DUENO)))
+    unirse(bot, quien=OTRO)
+    (pendiente,) = bot.almacen.pendientes()
+    assert not pendiente.avisado
+    assert "Lo estoy buscando" in dict(cliente.textos())[f"{NUEVO}@g.us"]
+
+
+def test_se_lo_cuenta_al_dueno_en_cuanto_le_escribe():
+    bot, cliente = bot_con_guardia(lambda c: c.destinos_que_fallan.add(privado_de(DUENO)))
+    unirse(bot, quien=OTRO)
+    (pendiente,) = bot.almacen.pendientes()
+    cliente.destinos_que_fallan.clear()
+
+    procesar(bot, evento(texto("!ping"), de=DUENO))
+    avisos = [t for d, t in cliente.textos() if d == privado_de(DUENO)]
+    assert len(avisos) == 1
+    assert "no te había podido avisar" in avisos[0]
+    assert f"!autorizar {pendiente.codigo}" in avisos[0] and "Grupo nuevo" in avisos[0]
+    assert bot.almacen.pendientes()[0].avisado
+
+    procesar(bot, evento(texto("!ping"), de=DUENO))  # y no se lo repite
+    assert len([t for d, t in cliente.textos() if d == privado_de(DUENO)]) == 1
+
+
+def test_a_los_que_no_son_duenos_no_les_cuenta_nada():
+    bot, cliente = bot_con_guardia(lambda c: c.destinos_que_fallan.add(privado_de(DUENO)))
+    unirse(bot, quien=OTRO)
+    cliente.destinos_que_fallan.clear()
+    procesar(bot, evento(texto("!ping"), de=OTRO))
+    assert [t for d, t in cliente.textos() if d == privado_de(OTRO)] == []
+    assert not bot.almacen.pendientes()[0].avisado
+
+
+def test_al_reconectarse_reintenta_los_avisos_que_no_salieron():
+    bot, cliente = bot_con_guardia(lambda c: c.destinos_que_fallan.add(privado_de(DUENO)))
+    unirse(bot, quien=OTRO)
+    cliente.destinos_que_fallan.clear()
+
+    asyncio.run(bot.guardia.preparar())  # como cuando vuelve la conexión
+    avisos = [t for d, t in cliente.textos() if d == privado_de(DUENO)]
+    assert len(avisos) == 1 and "me agregó al grupo" in avisos[0]
+    assert bot.almacen.pendientes()[0].avisado
+
+
+def test_avisa_en_el_log_si_el_numero_del_dueno_no_esta_en_whatsapp(caplog):
+    with caplog.at_level("ERROR"):
+        bot_con_guardia(lambda c: c.fuera_de_whatsapp.add(DUENO))
+    assert "no está en WhatsApp" in caplog.text and "config.toml" in caplog.text
+
+
+def test_grupos_marca_los_avisos_que_no_llegaron():
+    bot, cliente = bot_con_guardia(lambda c: c.destinos_que_fallan.add(privado_de(DUENO)))
+    unirse(bot, quien=OTRO)
+    cliente.destinos_que_fallan.add(privado_de(DUENO))  # sigue sin poder escribirle
+    procesar(bot, evento(texto("!grupos"), de=DUENO))
+    assert "No te pude avisar por privado" in cliente.respuestas[-1]

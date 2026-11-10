@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS grupos (
     nombre TEXT NOT NULL DEFAULT '',
     agregado_por TEXT NOT NULL DEFAULT '',
     codigo TEXT,
-    vence REAL
+    vence REAL,
+    avisado INTEGER NOT NULL DEFAULT 0  -- 1 si al dueño le llegó el aviso por privado
 );
 
 CREATE TABLE IF NOT EXISTS menu_visto (chat TEXT PRIMARY KEY);
@@ -108,6 +109,7 @@ class GrupoPendiente:
     agregado_por: str
     codigo: str
     vence: float  # time.time()
+    avisado: bool = False  # True si al dueño le llegó el aviso por privado
 
 
 class Almacen:
@@ -119,8 +121,17 @@ class Almacen:
         self._lock = threading.Lock()
         with self._lock:
             self._db.executescript(ESQUEMA)  # crea las tablas que falten (executescript maneja su propia transacción)
+            self._migrar()
         if archivo != ":memory:":
             self._db.execute("PRAGMA journal_mode=WAL")
+
+    def _migrar(self) -> None:
+        """Agrega las columnas nuevas a bases de datos de versiones anteriores."""
+        columnas = {fila["name"] for fila in self._db.execute("PRAGMA table_info(grupos)")}
+        if columnas and "avisado" not in columnas:
+            # Los grupos que ya estaban esperando quedan como "no avisados": así el bot
+            # le vuelve a avisar al dueño en cuanto pueda (ver guardia.py).
+            self._db.execute("ALTER TABLE grupos ADD COLUMN avisado INTEGER NOT NULL DEFAULT 0")
 
     def cerrar(self) -> None:
         self._db.close()
@@ -299,7 +310,8 @@ class Almacen:
         """Anota que el grupo espera permiso. False si ya estaba autorizado o pendiente."""
         with self._transaccion() as db:
             cursor = db.execute(
-                "INSERT OR IGNORE INTO grupos VALUES (?, 'pendiente', ?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO grupos (chat, estado, nombre, agregado_por, codigo, vence, avisado) "
+                "VALUES (?, 'pendiente', ?, ?, ?, ?, 0)",
                 (chat, nombre, agregado_por, codigo, vence),
             )
             return cursor.rowcount == 1
@@ -307,7 +319,15 @@ class Almacen:
     def pendientes(self) -> list[GrupoPendiente]:
         with self._transaccion() as db:
             filas = db.execute("SELECT * FROM grupos WHERE estado = 'pendiente' ORDER BY vence").fetchall()
-        return [GrupoPendiente(f["chat"], f["nombre"], f["agregado_por"], f["codigo"], f["vence"]) for f in filas]
+        return [
+            GrupoPendiente(f["chat"], f["nombre"], f["agregado_por"], f["codigo"], f["vence"], bool(f["avisado"]))
+            for f in filas
+        ]
+
+    def marcar_avisado(self, chat: str) -> bool:
+        """Anota que al dueño le llegó el aviso de ese grupo (para no repetírselo)."""
+        with self._transaccion() as db:
+            return db.execute("UPDATE grupos SET avisado = 1 WHERE chat = ?", (chat,)).rowcount == 1
 
     def autorizados(self) -> list[tuple[str, str]]:
         """[(chat, nombre)] de los grupos autorizados."""

@@ -170,6 +170,13 @@ Con `solo_el_dueno_agrega = true` (sección `[grupos]` de `config.toml`, viene a
 
 Necesita tu número en `duenos`. Si la lista está vacía, la restricción no se aplica (y queda un aviso en el log).
 
+**Si el aviso por privado no te llega**: el bot busca tu número en WhatsApp para escribirte al chat correcto, así que funciona igual si WhatsApp usa otra forma de tu número. Si aun así no sale (estaba sin conexión, el número está mal escrito, WhatsApp falló), no se pierde:
+
+- Te lo cuenta en cuanto le escribas por privado, aunque sea un `!ping`.
+- Lo reintenta cada vez que se reconecta.
+- `!grupos` marca con ⚠️ los grupos de los que no te pudo avisar.
+- Si tu número no está en WhatsApp, queda un error en el log (`logs\licha-bot.log`): revisá `duenos` en `config.toml`, en formato internacional, solo números y sin `+`.
+
 ---
 
 ## Agregar comandos nuevos
@@ -234,6 +241,8 @@ Si un comando necesita otra librería de Python, instalala dentro del entorno de
 - Mirá la ventana o `logs\licha-bot.log`: cada comando que recibe queda anotado.
 
 **En un grupo no contesta nada**: si lo agregó alguien que no es dueño, está esperando tu permiso. Fijate en tu privado o mandale `!grupos` al bot.
+
+**No me llegó el aviso para autorizar un grupo**: escribile cualquier cosa por privado (por ejemplo `!ping`) y te lo cuenta ahí mismo. Si pasa siempre, revisá `duenos` en `config.toml` y buscá `no está en WhatsApp` en `logs\licha-bot.log`.
 
 **Pone ⏳ y no responde**: esa persona mandó comandos muy seguido. Hay que esperar 3 segundos entre comandos (`espera_entre_comandos`). Los dueños no tienen esa espera.
 

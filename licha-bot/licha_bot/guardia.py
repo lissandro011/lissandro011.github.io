@@ -11,6 +11,16 @@ Con `[grupos] solo_el_dueno_agrega = true` (y al menos un número en `duenos`):
 - En un grupo sin autorizar el bot no le contesta a nadie, salvo a los dueños.
 - Los grupos donde el bot ya estaba la primera vez que arranca con esto quedan
   autorizados, para que actualizar no lo saque de ningún lado.
+
+El aviso por privado al dueño:
+
+- El número de `duenos` se busca en WhatsApp (`is_on_whatsapp`) para escribirle al
+  JID real. Así funciona igual si WhatsApp usa otra forma del número (por ejemplo,
+  los celulares argentinos con y sin el 9) y, si el número no existe, queda avisado
+  en el log en vez de fallar en silencio.
+- Cada grupo pendiente recuerda si el aviso llegó. Si no llegó (el bot estaba sin
+  conexión, el número estaba mal, WhatsApp falló), lo reintenta al conectarse y se
+  lo cuenta al dueño en cuanto le escribe, sin que tenga que mirar !grupos.
 """
 
 from __future__ import annotations
@@ -23,6 +33,7 @@ from typing import TYPE_CHECKING
 
 from neonize.proto.Neonize_pb2 import JID
 
+from .almacen import GrupoPendiente
 from .mensajes import jid_a_texto, numero_de
 
 if TYPE_CHECKING:
@@ -44,6 +55,7 @@ class Guardia:
         self._esperas: dict[str, asyncio.Task[None]] = {}
         self._lista = False
         self._propios: set[str] | None = None
+        self._jids_duenos: dict[str, JID] = {}  # número de config.toml → JID real en WhatsApp
 
     # -- estado ------------------------------------------------------------------- #
 
@@ -91,6 +103,78 @@ class Guardia:
             return True
         return False
 
+    # -- avisos al dueño ------------------------------------------------------------ #
+
+    async def jid_dueno(self, numero: str) -> JID:
+        """El JID con el que WhatsApp conoce a ese dueño (el número de config.toml si no lo encuentra)."""
+        guardado = self._jids_duenos.get(numero)
+        if guardado is not None:
+            return guardado
+        por_numero = JID(User=numero, Server="s.whatsapp.net")
+        try:
+            respuestas = await self.bot.cliente.is_on_whatsapp(f"+{numero}")
+        except Exception:
+            # Sin conexión todavía: le escribo al número tal cual y lo vuelvo a buscar la próxima.
+            log.debug("No pude buscar al dueño +%s en WhatsApp", numero, exc_info=True)
+            return por_numero
+        encontrado = next((r for r in respuestas if r.IsIn and r.JID.User), None)
+        if encontrado is None:
+            log.error(
+                "El número de dueño +%s no está en WhatsApp: no le puedo avisar nada por privado. "
+                "Revisá duenos en config.toml (formato internacional, solo números y sin «+»).",
+                numero,
+            )
+            return por_numero
+        jid = JID(User=encontrado.JID.User, Server=encontrado.JID.Server or "s.whatsapp.net")
+        if encontrado.JID.User != numero:
+            log.info("En WhatsApp el dueño +%s es +%s: le escribo ahí", numero, encontrado.JID.User)
+        self._jids_duenos[numero] = jid
+        return jid
+
+    async def avisar_duenos(self, texto: str) -> int:
+        """Manda un aviso por privado a todos los dueños. Devuelve a cuántos les llegó."""
+        llegaron = 0
+        for numero in sorted(self.bot.config.duenos):
+            if await self._enviar(await self.jid_dueno(numero), texto):
+                llegaron += 1
+        return llegaron
+
+    def _aviso(self, grupo: GrupoPendiente, recordatorio: bool = False) -> str:
+        p = self.bot.config.prefijo
+        faltan = max(0.0, (grupo.vence - time.time()) / 60)
+        cuanto = f"{faltan:.0f}" if faltan >= 1 else "menos de 1"
+        nombre = grupo.nombre or "sin nombre"
+        cabeza = (
+            f"🔔 Perdón, no te había podido avisar: {grupo.agregado_por} me agregó al grupo «{nombre}»."
+            if recordatorio
+            else f"🔔 {grupo.agregado_por} me agregó al grupo «{nombre}»."
+        )
+        return (
+            f"{cabeza}\n"
+            f"Para que me quede: {p}autorizar {grupo.codigo}\n"
+            f"Para sacarme: {p}rechazar {grupo.codigo}\n"
+            f"Si no contestás en {cuanto} minutos, me voy solo."
+        )
+
+    def _pendientes_sin_avisar(self) -> list[GrupoPendiente]:
+        return [g for g in self.bot.almacen.pendientes() if not g.avisado]
+
+    async def recordar_pendientes(self, destino: JID | None = None) -> int:
+        """Le cuenta al dueño los grupos que esperan permiso y de los que no se enteró.
+
+        `destino` es el chat donde contestarle (el privado desde el que acaba de escribir);
+        sin destino, se les escribe a todos los dueños. Devuelve cuántos avisos salieron.
+        """
+        avisados = 0
+        for grupo in self._pendientes_sin_avisar():
+            texto = self._aviso(grupo, recordatorio=True)
+            llego = await self._enviar(destino, texto) if destino is not None else bool(await self.avisar_duenos(texto))
+            if llego:
+                self.bot.almacen.marcar_avisado(grupo.chat)
+                avisados += 1
+                log.info("Le recordé al dueño el grupo %s", grupo.chat)
+        return avisados
+
     # -- al conectar ---------------------------------------------------------------- #
 
     async def preparar(self) -> None:
@@ -114,6 +198,10 @@ class Guardia:
                 "solo_el_dueno_agrega está activado pero no hay números en duenos (config.toml): "
                 "cualquiera puede agregar el bot a un grupo hasta que completes duenos."
             )
+        for numero in sorted(self.bot.config.duenos):
+            await self.jid_dueno(numero)  # deja el JID listo y avisa en el log si el número está mal
+        if await self.recordar_pendientes():  # avisos que quedaron sin mandar (bot apagado, número mal, etc.)
+            log.info("Mandé los avisos de grupos que habían quedado pendientes")
 
     # -- cuando lo agregan a un grupo ------------------------------------------------- #
 
@@ -158,21 +246,28 @@ class Guardia:
         if not almacen.grupo_pendiente(chat, nombre, agregado_por, codigo, vence):
             return  # ya estaba esperando permiso (o lo autorizaron mientras tanto)
         log.info("%s me agregó al grupo %s (%s): pido permiso al dueño (código %s)", agregado_por, nombre, chat, codigo)
+        pendiente = GrupoPendiente(chat, nombre, agregado_por, codigo, vence)
+        llegaron = await self.avisar_duenos(self._aviso(pendiente))
+        if llegaron:
+            almacen.marcar_avisado(chat)
+        else:
+            log.error(
+                "No le pude avisar a ningún dueño que me agregaron al grupo %s (%s). Código: %s. "
+                "Se lo recuerdo en cuanto me escriba por privado; mientras tanto lo puede ver con %sgrupos.",
+                nombre or chat,
+                chat,
+                codigo,
+                self.bot.config.prefijo,
+            )
         m = f"{self.minutos:g}"
-        p = self.bot.config.prefijo
+        aclaracion = (
+            f"Ya le avisé: si no me autoriza en {m} minutos, me voy solo."
+            if llegaron
+            else f"Lo estoy buscando: si no me autoriza en {m} minutos, me voy solo."
+        )
         await self._enviar(
-            chat_jid,
-            "👋 ¡Hola! Para quedarme en este grupo necesito el permiso del dueño. "
-            f"Ya le avisé: si no me autoriza en {m} minutos, me voy solo.",
+            chat_jid, f"👋 ¡Hola! Para quedarme en este grupo necesito el permiso del dueño. {aclaracion}"
         )
-        aviso = (
-            f"🔔 {agregado_por} me agregó al grupo «{nombre or 'sin nombre'}».\n"
-            f"Para que me quede: {p}autorizar {codigo}\n"
-            f"Para sacarme: {p}rechazar {codigo}\n"
-            f"Si no contestás en {m} minutos, me voy solo."
-        )
-        for dueno in sorted(self.bot.config.duenos):
-            await self._enviar(JID(User=dueno, Server="s.whatsapp.net"), aviso)
         self._programar_vencimiento(chat, vence)
 
     def _programar_vencimiento(self, chat: str, vence: float) -> None:
@@ -230,8 +325,11 @@ class Guardia:
         if tarea is not None and tarea is not asyncio.current_task():
             tarea.cancel()
 
-    async def _enviar(self, jid: JID, texto: str) -> None:
+    async def _enviar(self, jid: JID, texto: str) -> bool:
+        """Manda un mensaje. False si WhatsApp no lo aceptó (queda avisado en el log)."""
         try:
             await self.bot.cliente.send_message(jid, texto)
+            return True
         except Exception:
             log.warning("No pude mandar un mensaje a %s", jid_a_texto(jid), exc_info=True)
+            return False

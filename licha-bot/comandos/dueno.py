@@ -134,6 +134,8 @@ async def grupos(ctx: Contexto) -> None:
         lineas += ["", "⏳ Esperando tu permiso:"]
         for g in pendientes:
             lineas.append(f"• «{g.nombre or 'sin nombre'}» (me agregó {g.agregado_por})")
+            if not g.avisado:
+                lineas.append("  ⚠️ No te pude avisar por privado cuando pasó.")
             lineas.append(f"  {p}autorizar {g.codigo} o {p}rechazar {g.codigo}")
     if not ctx.bot.guardia.activa:
         lineas += [
