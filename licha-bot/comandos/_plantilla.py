@@ -14,7 +14,7 @@ error queda en logs\\licha-bot.log.
 
 Lo que podés usar dentro de un comando (ctx):
 
-  ctx.args          palabras después del comando: "!dado 20" -> ["20"]
+  ctx.args          palabras después del comando: "!numero 20" -> ["20"]
   ctx.texto_args    todo lo de después del comando, como texto
   ctx.nombre        nombre de quien escribió
   ctx.numero        su número (si WhatsApp lo informa)
@@ -53,24 +53,24 @@ from licha_bot.contexto import Contexto
 
 # --------------------------------------------------------------------------- #
 # Ejemplo 1: un comando simple con un argumento opcional.
-#   !dado      -> número del 1 al 6
-#   !dado 20   -> número del 1 al 20
+#   !numero      -> número del 1 al 100
+#   !numero 10   -> número del 1 al 10
 # --------------------------------------------------------------------------- #
 
 
 @comando(
-    "dado", "dados",
+    "numero", "azar",
     categoria="Diversión",
-    descripcion="Tira un dado",
-    uso="{p}dado → del 1 al 6\n{p}dado 20 → del 1 al 20",
+    descripcion="Dice un número al azar",
+    uso="{p}numero → del 1 al 100\n{p}numero 10 → del 1 al 10",
 )  # fmt: skip
-async def dado(ctx: Contexto) -> None:
-    caras = 6
+async def numero(ctx: Contexto) -> None:
+    hasta = 100
     if ctx.args:
-        if not ctx.args[0].isdigit() or not 2 <= int(ctx.args[0]) <= 1000:
-            raise ErrorUsuario(f"Decime un número de caras entre 2 y 1000. Ejemplo: {ctx.prefijo}dado 20")
-        caras = int(ctx.args[0])
-    await ctx.responder(f"🎲 Salió {random.randint(1, caras)}")
+        if not ctx.args[0].isdigit() or not 2 <= int(ctx.args[0]) <= 1_000_000:
+            raise ErrorUsuario(f"Decime un número entre 2 y 1000000. Ejemplo: {ctx.prefijo}numero 10")
+        hasta = int(ctx.args[0])
+    await ctx.responder(f"🔢 Salió {random.randint(1, hasta)}")
 
 
 # --------------------------------------------------------------------------- #
